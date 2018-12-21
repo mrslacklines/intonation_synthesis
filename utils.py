@@ -1,3 +1,4 @@
+import numpy
 import os
 
 from nnmnkwii.io import hts
@@ -17,3 +18,12 @@ def add_time_to_full_context_labels_from_fal(workdir):
         full.end_times = fal.end_times
         with open(workdir + '/data/labels/full/' + label_file, 'w') as lab:
             lab.write(str(full))
+
+
+def pad_array(ref_shape, array):
+    result = numpy.zeros(ref_shape)
+    if len(array.shape) == 1:
+        result[:array.shape[0]] = array
+    elif len(array.shape) == 2:
+        result[:array.shape[0], :array.shape[1]] = array
+    return result
