@@ -1,13 +1,11 @@
 import mxnet as mx
 import os
 import numpy
+import random
 from merlin.src.io_funcs import htk_io
 from nnmnkwii.frontend import merlin as fe
 from nnmnkwii.io import hts
 from sklearn.preprocessing import MinMaxScaler, Normalizer
-
-
-mx.random.seed(42)  # set seed for repeatability
 
 
 class HTSDataset(mx.gluon.data.dataset.Dataset):
@@ -15,8 +13,12 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
     A dataset for loading HTS data from disk.
     """
 
-    def __init__(self, hts_dataset_path, transform=None, max_size=None):
+    def __init__(
+            self, hts_dataset_path, transform=None, max_size=None,
+            split_ratio=0.8, randomize=True):
         self.max_size = max_size
+        self.split_ratio = split_ratio
+        self.randomize = randomize
         self.target_feature_order = 150
         self.target_features_list = [150, 151, 152]
         self.workdir = hts_dataset_path
@@ -28,10 +30,13 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         file_list = [
             file for file in os.listdir(self.workdir + '/data/labels/full/')
             if 'lab' in os.path.splitext(file)[1]]
+        if self.randomize:
+            random.shuffle(file_list)
         if self.max_size:
             file_list = file_list[:self.max_size]
 
-        self.file_list = file_list
+        self.train_data = file_list[:int(len(file_list) * self.split_ratio)]
+        self.test_data = file_list[int(len(file_list) * self.split_ratio):]
 
     def load_hed_questions(self):
         self.binary_dict, self.continuous_dict = hts.load_question_set(
@@ -74,8 +79,8 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         return acoustic_features
 
     def __getitem__(self, idx):
-        filename = self.file_list[idx]
-        basename, ext = os.path.splitext(self.file_list[idx])
+        filename = self.train_data[idx]
+        basename, ext = os.path.splitext(self.train_data[idx])
         fullcontext_label = self.load_hts_label(filename)
         linguistic_features = self.load_linguistic_features(fullcontext_label)
         acoustic_features, target = self.load_hts_acoustic_data(
@@ -93,4 +98,4 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         return feats, target
 
     def __len__(self):
-        return len(self.file_list)
+        return len(self.train_data)

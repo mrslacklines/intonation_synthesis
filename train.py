@@ -11,9 +11,15 @@ from utils import pad_array
 CPU_COUNT = cpu_count()
 WORKDIR = '/media/tomaszk/DANE/Speech_archive/HTS-demo_AMU_PL_ILO_STRAIGHT'
 BATCH_SIZE = 10
-DATASET_SIZE_LIMIT = 100
+DATASET_SIZE_LIMIT = None
 EPOCHS = 100
 LEARNING_RATE = 0.0001
+
+NUM_LAYERS = 3
+HIDDEN_SIZE = 100
+DROPOUT = 0.2
+BIDIRECTIONAL = True
+
 
 model_ctx = mx.cpu()
 
@@ -27,12 +33,14 @@ def pad_data(features, target, max_seq_len=1900):
     return features_padded, target_padded
 
 
-def build_net(hidden_size=100, bidirectional=True):
+def build_net(
+        hidden_size=HIDDEN_SIZE, num_layers=NUM_LAYERS, dropout=DROPOUT,
+        bidirectional=BIDIRECTIONAL):
     net = mx.gluon.nn.Sequential()
     with net.name_scope():
         net.add(mx.gluon.rnn.LSTM(
-            hidden_size=hidden_size, bidirectional=bidirectional,
-            layout='NTC'))
+            hidden_size=hidden_size, num_layers=num_layers, dropout=dropout,
+            bidirectional=bidirectional, layout='NTC'))
 
     return net
 
