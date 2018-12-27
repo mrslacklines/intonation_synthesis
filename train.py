@@ -19,13 +19,15 @@ NUM_LAYERS = 3
 HIDDEN_SIZE = 100
 DROPOUT = 0.2
 BIDIRECTIONAL = True
+TRAIN_ON_GPU = False
+FEATURES_ORDER = 1527
 
 
 model_ctx = mx.cpu()
 
 
 def pad_data(features, target, max_seq_len=1900):
-    X = numpy.ndarray([max_seq_len, 1524])
+    X = numpy.ndarray([max_seq_len, FEATURES_ORDER])
     y = numpy.ndarray([max_seq_len])
     features_padded = pad_array(X.shape, features)
     target_padded = pad_array(y.shape, target)
@@ -47,12 +49,16 @@ def build_net(
 
 def train():
 
+    hts_dataset = HTSDataset(
+        WORKDIR, transform=pad_data, max_size=DATASET_SIZE_LIMIT)
     train_data = gluon.data.DataLoader(
-        HTSDataset(WORKDIR, transform=pad_data, max_size=DATASET_SIZE_LIMIT),
-        batch_size=BATCH_SIZE, num_workers=CPU_COUNT)
-
+        hts_dataset, batch_size=BATCH_SIZE, num_workers=CPU_COUNT)
+    hts_dataset.load_duration_data(
+        'amu_pl_ilo_BAZA_2006A_zbitki_A0001.lab')
     net = build_net()
     net.collect_params().initialize(mx.init.Xavier(), ctx=model_ctx)
+    if TRAIN_ON_GPU:
+        net.collect_params().reset_ctx(mx.gpu(0))
     trainer = gluon.Trainer(
         net.collect_params(), 'sgd', {'learning_rate': LEARNING_RATE})
     sceloss = mx.gluon.loss.SoftmaxCrossEntropyLoss()
