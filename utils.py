@@ -1,5 +1,6 @@
 import numpy
 import os
+import pandas
 
 from nnmnkwii.io import hts
 
@@ -27,3 +28,9 @@ def pad_array(ref_shape, array):
     elif len(array.shape) == 2:
         result[:array.shape[0], :array.shape[1]] = array
     return result
+
+
+def interpolate_f0(f0_arr):
+    series = pandas.Series(f0_arr, dtype='d')
+    return series.interpolate(
+        method='cubic').fillna(0).values

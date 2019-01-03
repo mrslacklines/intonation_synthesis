@@ -9,6 +9,8 @@ from nnmnkwii.frontend import merlin as fe
 from nnmnkwii.io import hts
 from sklearn.preprocessing import MinMaxScaler, Normalizer
 
+from utils import interpolate_f0
+
 
 class HTSDataset(mx.gluon.data.dataset.Dataset):
     """
@@ -68,7 +70,11 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
 
         return features
 
-    def load_hts_acoustic_data(self, cmp_filename):
+    def make_ti(self, f0):
+        pass
+
+    def load_hts_acoustic_data(
+            self, cmp_filename, add_ti=False, use_window=False):
         htk_reader = htk_io.HTK_Parm_IO()
         htk_reader.read_htk(self.workdir + '/data/cmp/' + cmp_filename)
 
@@ -78,7 +84,8 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         numpy.place(target, target < 0, [None, ])
         acoustic_features = numpy.delete(
             htk_reader.data, self.target_features_list, 1)
-
+        if add_ti:
+            self.make_ti(interpolate_f0(target))
         return acoustic_features, target
 
     def load_duration_data(self, label, frame_shift_in_micro_sec=50000):
