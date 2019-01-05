@@ -8,9 +8,9 @@ from datasets import HTSDataset
 from utils import pad_array
 
 
-CPU_COUNT = cpu_count()
+CPU_COUNT = 0  # cpu_count()
 WORKDIR = '/media/tomaszk/DANE/Speech_archive/HTS-demo_AMU_PL_ILO_STRAIGHT'
-BATCH_SIZE = 10
+BATCH_SIZE = 0
 DATASET_SIZE_LIMIT = None
 EPOCHS = 100
 LEARNING_RATE = 0.0001
@@ -19,10 +19,15 @@ NUM_LAYERS = 3
 HIDDEN_SIZE = 100
 DROPOUT = 0.2
 USE_MOVING_WINDOW = True
-WINDOW_SIZE = 100
+F0_WINDOW_LEN = 20
 BIDIRECTIONAL = True if not USE_MOVING_WINDOW else False
 TRAIN_ON_GPU = False
-FEATURES_ORDER = 1527
+FEATURES_ORDER = 1581
+
+MAX_DURATION = 14950000.0
+MIN_DURATION = 0
+MIN_F0 = -20.299814419936542
+MAX_F0 = 35.15619563784128
 
 
 model_ctx = mx.cpu()
@@ -52,11 +57,11 @@ def build_net(
 def train():
 
     hts_dataset = HTSDataset(
-        WORKDIR, transform=pad_data, max_size=DATASET_SIZE_LIMIT)
+        WORKDIR, transform=pad_data, max_size=DATASET_SIZE_LIMIT,
+        f0_backward_window_len=F0_WINDOW_LEN, min_f0=MIN_F0, max_f0=MAX_F0,
+        min_duration=MIN_DURATION, max_duration=MAX_DURATION)
     train_data = gluon.data.DataLoader(
         hts_dataset, batch_size=BATCH_SIZE, num_workers=CPU_COUNT)
-    hts_dataset.load_duration_data(
-        'amu_pl_ilo_BAZA_2006A_zbitki_A0001.lab')
     net = build_net()
     net.collect_params().initialize(mx.init.Xavier(), ctx=model_ctx)
     if TRAIN_ON_GPU:
@@ -86,6 +91,8 @@ def train():
 
     plt.plot(loss_sequence)
     plt.show()
+    import ipdb; ipdb.set_trace()  # breakpoint 721ecf03 //
+    pass
 
 
 if __name__ == '__main__':
