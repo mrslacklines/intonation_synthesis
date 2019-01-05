@@ -8,11 +8,11 @@ from datasets import HTSDataset
 from utils import pad_array
 
 
-CPU_COUNT = 0  # cpu_count()
+CPU_COUNT = cpu_count()
 WORKDIR = '/media/tomaszk/DANE/Speech_archive/HTS-demo_AMU_PL_ILO_STRAIGHT'
-BATCH_SIZE = 0
+BATCH_SIZE = 10
 DATASET_SIZE_LIMIT = None
-EPOCHS = 100
+EPOCHS = 200
 LEARNING_RATE = 0.0001
 
 NUM_LAYERS = 3
@@ -22,7 +22,7 @@ USE_MOVING_WINDOW = True
 F0_WINDOW_LEN = 20
 BIDIRECTIONAL = True if not USE_MOVING_WINDOW else False
 TRAIN_ON_GPU = False
-FEATURES_ORDER = 1581
+FEATURES_ORDER = 4114
 
 MAX_DURATION = 14950000.0
 MIN_DURATION = 0
@@ -31,6 +31,13 @@ MAX_F0 = 35.15619563784128
 
 
 model_ctx = mx.cpu()
+
+
+def hprint(string):
+    print('=' * 50)
+    print(string)
+    print('=' * 50)
+
 
 
 def pad_data(features, target, max_seq_len=1900):
@@ -60,6 +67,9 @@ def train():
         WORKDIR, transform=pad_data, max_size=DATASET_SIZE_LIMIT,
         f0_backward_window_len=F0_WINDOW_LEN, min_f0=MIN_F0, max_f0=MAX_F0,
         min_duration=MIN_DURATION, max_duration=MAX_DURATION)
+
+    hprint('Dataset size: {}'.format(str(len(hts_dataset))))
+
     train_data = gluon.data.DataLoader(
         hts_dataset, batch_size=BATCH_SIZE, num_workers=CPU_COUNT)
     net = build_net()
@@ -70,9 +80,7 @@ def train():
         net.collect_params(), 'sgd', {'learning_rate': LEARNING_RATE})
     sceloss = mx.gluon.loss.SoftmaxCrossEntropyLoss()
 
-    print("=" * 50)
-    print("Training... ({} epochs)".format(EPOCHS))
-    print("=" * 50)
+    hprint("Training... ({} epochs)".format(EPOCHS))
 
     loss_sequence = []
     for e in range(EPOCHS):
@@ -85,14 +93,16 @@ def train():
             trainer.step(BATCH_SIZE)
             mean_loss = nd.mean(loss).asscalar()
             cumulative_loss += mean_loss
-        print("Epoch {}, loss: {}".format(
+
+        hprint("Epoch {}, loss: {}".format(
+
             e, cumulative_loss / y_batch[0].shape[0]))
         loss_sequence.append(cumulative_loss / y_batch[0].shape[0])
+        f = plt.figure()
+        plt.plot(loss_sequence)
+        f.savefig("loss_sequence.pdf", bbox_inches='tight')
 
-    plt.plot(loss_sequence)
     plt.show()
-    import ipdb; ipdb.set_trace()  # breakpoint 721ecf03 //
-    pass
 
 
 if __name__ == '__main__':
