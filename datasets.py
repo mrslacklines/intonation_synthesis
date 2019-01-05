@@ -9,6 +9,8 @@ from nnmnkwii.frontend import merlin as fe
 from nnmnkwii.io import hts
 from sklearn.preprocessing import MinMaxScaler, Normalizer
 
+from utils import interpolate_f0, scale
+
 
 class HTSDataset(mx.gluon.data.dataset.Dataset):
     """
@@ -17,18 +19,25 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
 
     def __init__(
             self, hts_dataset_path, transform=None, max_size=None,
-            split_ratio=0.8, randomize=True):
+            split_ratio=0.8, randomize=True, f0_backward_window_len=50,
+            min_f0=None, max_f0=None, min_duration=None, max_duration=None):
         self.max_size = max_size
         self.split_ratio = split_ratio
         self.randomize = randomize
         self.target_feature_order = 150
         self.target_features_list = [150, 151, 152]
+        self.f0_backward_window_len = f0_backward_window_len
         self.workdir = hts_dataset_path
         self._transform = transform
         self.question_file_name = \
             self.workdir + '/data/questions/questions_qst001.hed'
         self.list_files()
         self.load_hed_questions()
+
+        self.min_f0 = min_f0
+        self.max_f0 = max_f0
+        self.min_duration = min_duration
+        self.max_duration = max_duration
 
         self.PAU = re.compile('\-pau\+')
         self.LAST_SEG_IN_SYL = re.compile('_1\/A\:')
@@ -68,7 +77,23 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
 
         return features
 
-    def load_hts_acoustic_data(self, cmp_filename):
+    def make_ti(self, f0):
+        pass
+
+    def add_f0_window(self, f0):
+        df = pandas.DataFrame(f0, columns=['f0', ])
+        for val_num in range(1, self.f0_backward_window_len + 1):
+            for i in range(val_num, len(df)):
+                df.loc[i, 'f0_lookback' + str(val_num)] = \
+                    df.loc[i - val_num, 'f0']
+        df.fillna(0, inplace=True)
+        df.drop('f0', axis=1)
+        if self.min_f0 is not None and self.max_f0 is not None:
+            df = df.apply(scale, old_min=self.min_f0, old_max=self.max_f0)
+        return df.values
+
+    def load_hts_acoustic_data(
+            self, cmp_filename, add_ti=False, use_window=False):
         htk_reader = htk_io.HTK_Parm_IO()
         htk_reader.read_htk(self.workdir + '/data/cmp/' + cmp_filename)
 
@@ -78,7 +103,8 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         numpy.place(target, target < 0, [None, ])
         acoustic_features = numpy.delete(
             htk_reader.data, self.target_features_list, 1)
-
+        if add_ti:
+            self.make_ti(interpolate_f0(target))
         return acoustic_features, target
 
     def load_duration_data(self, label, frame_shift_in_micro_sec=50000):
@@ -147,6 +173,7 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         last_syl_dur = 0
         last_word_dur = 0
 
+        ref_df = df.copy()
         for index, row in df[::-1].iterrows():
             if row['segment'] > 0:
                 last_seg_dur = row['segment']
@@ -164,15 +191,33 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
             elif last_word_dur:
                 last_word_dur -= frame_shift_in_micro_sec
                 df.loc[index]['word'] = last_word_dur
+        for index, row in ref_df.iterrows():
+            for column in ref_df.columns:
+                if row[column] != 0:
+                    rem_duration = row[column]
+                    for prev_index in range(
+                            row.name - row[column] + frame_shift_in_micro_sec,
+                            row.name + frame_shift_in_micro_sec,
+                            frame_shift_in_micro_sec):
+                        df.loc[prev_index, column + '_remaining'] = \
+                            rem_duration
+                        rem_duration -= frame_shift_in_micro_sec
+
+        df.fillna(0, inplace=True)
+
+        if self.min_duration is not None and self.max_duration is not None:
+            df = df.apply(
+                scale, old_min=self.min_duration, old_max=self.max_duration)
 
         return df.values
 
-    def preprocess_acoustic_features(self, acoustic_features):
-        acoustic_features = MinMaxScaler(feature_range=(0, 1)).fit_transform(
-            acoustic_features)
-        acoustic_features = Normalizer().fit_transform(acoustic_features)
+    def preprocess_features(self, features, normalize=True):
+        features = MinMaxScaler(feature_range=(0, 1)).fit_transform(
+            features)
+        if normalize:
+            features = Normalizer().fit_transform(features)
 
-        return acoustic_features
+        return features
 
     def __getitem__(self, idx):
         filename = self.train_data[idx]
@@ -181,14 +226,17 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         linguistic_features = self.load_linguistic_features(fullcontext_label)
         acoustic_features, target = self.load_hts_acoustic_data(
             basename + '.cmp')
-        acoustic_features = self.preprocess_acoustic_features(
+        acoustic_features = self.preprocess_features(
             acoustic_features)
+        f0_window_features = self.add_f0_window(interpolate_f0(target))
         duration_features = self.load_duration_data(filename)
+
         assert(
             acoustic_features.shape[0] == duration_features.shape[0] ==
-            linguistic_features.shape[0])
+            linguistic_features.shape[0] == f0_window_features.shape[0])
         feats = numpy.hstack(
-            [acoustic_features, duration_features, linguistic_features])
+            [acoustic_features, duration_features, linguistic_features,
+             f0_window_features])
 
         if self._transform is not None:
             feats, target = self._transform(feats, target)
@@ -196,6 +244,7 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         feats, target = \
             mx.nd.array(numpy.nan_to_num(feats)), \
             mx.nd.array(numpy.nan_to_num(target))
+        import ipdb; ipdb.set_trace()  # breakpoint 5e211b8a //
         return feats, target
 
     def __len__(self):

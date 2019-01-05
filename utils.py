@@ -1,5 +1,6 @@
 import numpy
 import os
+import pandas
 
 from nnmnkwii.io import hts
 
@@ -27,3 +28,15 @@ def pad_array(ref_shape, array):
     elif len(array.shape) == 2:
         result[:array.shape[0], :array.shape[1]] = array
     return result
+
+
+def interpolate_f0(f0_arr):
+    series = pandas.Series(f0_arr, dtype='d')
+    return series.interpolate(
+        method='cubic').fillna(0).values
+
+
+def scale(value, old_min, old_max, new_min=0, new_max=1):
+    old_range = (old_max - old_min)
+    new_range = (new_max - new_min)
+    return (((value - old_min) * new_range) / old_range) + new_min
