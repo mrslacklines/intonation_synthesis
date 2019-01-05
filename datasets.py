@@ -9,6 +9,7 @@ from nnmnkwii.frontend import merlin as fe
 from nnmnkwii.io import hts
 from sklearn.preprocessing import MinMaxScaler, Normalizer
 
+from technical_indicators import make_technical_indicators
 from utils import interpolate_f0, scale
 
 
@@ -87,7 +88,7 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
                 df.loc[i, 'f0_lookback' + str(val_num)] = \
                     df.loc[i - val_num, 'f0']
         df.fillna(0, inplace=True)
-        df.drop('f0', axis=1)
+        df = df.drop('f0', axis=1)
         if self.min_f0 is not None and self.max_f0 is not None:
             df = df.apply(scale, old_min=self.min_f0, old_max=self.max_f0)
         return df.values
@@ -219,8 +220,18 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
 
         return features
 
+    def add_ti_features(self, f0):
+        df = pandas.DataFrame(f0, columns=['f0_' + str(n) for n in range(
+            self.f0_backward_window_len)])
+        df.fillna(0, inplace=True)
+        if self.min_f0 is not None and self.max_f0 is not None:
+            df = df.apply(scale, old_min=self.min_f0, old_max=self.max_f0)
+        df = make_technical_indicators(df)
+        return df
+
     def __getitem__(self, idx):
         filename = self.train_data[idx]
+        print("Processing {}..".format(filename))
         basename, ext = os.path.splitext(self.train_data[idx])
         fullcontext_label = self.load_hts_label(filename)
         linguistic_features = self.load_linguistic_features(fullcontext_label)
@@ -229,14 +240,18 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         acoustic_features = self.preprocess_features(
             acoustic_features)
         f0_window_features = self.add_f0_window(interpolate_f0(target))
+        f0_technical_indicators = self.add_ti_features(f0_window_features)
+        f0_technical_indicators = self.preprocess_features(
+            f0_technical_indicators.astype('float64'))
         duration_features = self.load_duration_data(filename)
 
         assert(
             acoustic_features.shape[0] == duration_features.shape[0] ==
-            linguistic_features.shape[0] == f0_window_features.shape[0])
+            linguistic_features.shape[0] == f0_window_features.shape[0] ==
+            f0_technical_indicators.shape[0])
         feats = numpy.hstack(
             [acoustic_features, duration_features, linguistic_features,
-             f0_window_features])
+             f0_window_features, f0_technical_indicators])
 
         if self._transform is not None:
             feats, target = self._transform(feats, target)
@@ -244,7 +259,6 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         feats, target = \
             mx.nd.array(numpy.nan_to_num(feats)), \
             mx.nd.array(numpy.nan_to_num(target))
-        import ipdb; ipdb.set_trace()  # breakpoint 5e211b8a //
         return feats, target
 
     def __len__(self):
