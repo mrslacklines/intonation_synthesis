@@ -1,1 +1,0 @@
-floyd run --cpu --env mxnet --data mrslacklines/datasets/amu_pl_ilo/1:data  floyd run "git clone https://github.com/CSTR-Edinburgh/merlin.git && mv merlin merlin_repo && ln -s merlin merlin_repo/src/ && cd merlin_repo && pip install -r requirements.txt && cd && python train.py"
