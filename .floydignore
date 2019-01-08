@@ -1,6 +1,11 @@
 
 # Directories and files to ignore when uploading code to floyd
 
+data
+.ipynb_checkpoints
+merlin
+merlin_repo
+__pycache__
 .git
 .eggs
 eggs
