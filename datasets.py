@@ -19,9 +19,10 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
     """
 
     def __init__(
-            self, hts_dataset_path, transform=None, max_size=None,
-            split_ratio=0.8, randomize=True, f0_backward_window_len=50,
-            min_f0=None, max_f0=None, min_duration=None, max_duration=None):
+            self, hts_dataset_path, file_list=None, transform=None,
+            max_size=None, split_ratio=0.8, randomize=True,
+            f0_backward_window_len=50, min_f0=None, max_f0=None,
+            min_duration=None, max_duration=None):
         self.max_size = max_size
         self.split_ratio = split_ratio
         self.randomize = randomize
@@ -29,6 +30,7 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         self.target_features_list = [150, 151, 152]
         self.f0_backward_window_len = f0_backward_window_len
         self.workdir = hts_dataset_path
+        self.file_list = file_list
         self._transform = transform
         self.question_file_name = \
             self.workdir + '/data/questions/questions_qst001.hed'
@@ -47,16 +49,20 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         self.SYL_POS_IN_PHR = re.compile('\-(\d)\#')
 
     def list_files(self):
-        file_list = [
-            file for file in os.listdir(self.workdir + '/data/labels/full/')
-            if 'lab' in os.path.splitext(file)[1]]
-        if self.randomize:
-            random.shuffle(file_list)
-        if self.max_size:
-            file_list = file_list[:self.max_size]
+        if self.file_list is not None:
+            self.data = self.file_list
+        elif self.file_list is None:
+            file_list = [
+                file for file in os.listdir(
+                    self.workdir + '/data/labels/full/')
+                if 'lab' in os.path.splitext(file)[1]]
+            if self.randomize:
+                random.shuffle(file_list)
+            if self.max_size:
+                file_list = file_list[:self.max_size]
 
-        self.train_data = file_list[:int(len(file_list) * self.split_ratio)]
-        self.test_data = file_list[int(len(file_list) * self.split_ratio):]
+            self.data = file_list[:int(len(file_list) * self.split_ratio)]
+            self.test_data = file_list[int(len(file_list) * self.split_ratio):]
 
     def load_hed_questions(self):
         self.binary_dict, self.continuous_dict = hts.load_question_set(
@@ -78,9 +84,6 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
 
         return features
 
-    def make_ti(self, f0):
-        pass
-
     def add_f0_window(self, f0):
         df = pandas.DataFrame(f0, columns=['f0', ])
         for val_num in range(1, self.f0_backward_window_len + 1):
@@ -93,6 +96,9 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
             df = df.apply(scale, old_min=self.min_f0, old_max=self.max_f0)
         return df.values
 
+    def make_vuv(self, f0):
+        return numpy.array([[el, ] for el in numpy.isfinite(f0).astype(int)])
+
     def load_hts_acoustic_data(
             self, cmp_filename, add_ti=False, use_window=False):
         htk_reader = htk_io.HTK_Parm_IO()
@@ -104,8 +110,7 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         numpy.place(target, target < 0, [None, ])
         acoustic_features = numpy.delete(
             htk_reader.data, self.target_features_list, 1)
-        if add_ti:
-            self.make_ti(interpolate_f0(target))
+
         return acoustic_features, target
 
     def load_duration_data(self, label, frame_shift_in_micro_sec=50000):
@@ -212,11 +217,9 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
 
         return df.values
 
-    def preprocess_features(self, features, normalize=True):
-        features = MinMaxScaler(feature_range=(0, 1)).fit_transform(
+    def preprocess_features(self, features, normalize=False):
+        features = MinMaxScaler(feature_range=(-1, 1)).fit_transform(
             features)
-        if normalize:
-            features = Normalizer().fit_transform(features)
 
         return features
 
@@ -230,16 +233,25 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         return df
 
     def __getitem__(self, idx):
-        filename = self.train_data[idx]
+        filename = self.data[idx]
         print("Processing {}..".format(filename))
-        basename, ext = os.path.splitext(self.train_data[idx])
+        basename, ext = os.path.splitext(filename)
         fullcontext_label = self.load_hts_label(filename)
         linguistic_features = self.load_linguistic_features(fullcontext_label)
         acoustic_features, target = self.load_hts_acoustic_data(
             basename + '.cmp')
+        vuv = self.make_vuv(target)
         acoustic_features = self.preprocess_features(
             acoustic_features)
-        f0_window_features = self.add_f0_window(interpolate_f0(target))
+        target_df = pandas.DataFrame(target)
+        target_df.apply(
+            scale, old_min=self.min_f0, old_max=self.max_f0, new_min=-1,
+            new_max=1).fillna(0).values
+        target = self.preprocess_features(
+            numpy.nan_to_num(target).reshape(-1, 1), normalize=False)
+        # add target scaling ?
+        # add interpolated f0 window
+        f0_window_features = self.add_f0_window(target)
         f0_technical_indicators = self.add_ti_features(f0_window_features)
         f0_technical_indicators = self.preprocess_features(
             f0_technical_indicators.astype('float64'))
@@ -248,9 +260,9 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         assert(
             acoustic_features.shape[0] == duration_features.shape[0] ==
             linguistic_features.shape[0] == f0_window_features.shape[0] ==
-            f0_technical_indicators.shape[0])
+            f0_technical_indicators.shape[0] == vuv.shape[0])
         feats = numpy.hstack(
-            [acoustic_features, duration_features, linguistic_features,
+            [acoustic_features, linguistic_features, vuv, duration_features,
              f0_window_features, f0_technical_indicators])
 
         if self._transform is not None:
@@ -262,4 +274,4 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         return feats, target
 
     def __len__(self):
-        return len(self.train_data)
+        return len(self.data)
