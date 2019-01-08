@@ -125,8 +125,8 @@ def train():
             cumulative_loss += mean_loss
 
         hprint("Epoch {}, loss: {}".format(
-
             e, cumulative_loss / y_batch[0].shape[0]))
+        print('{{"metric": "loss", "value": {}}}'.format(mean_loss))
         loss_sequence.append(cumulative_loss / y_batch[0].shape[0])
     f = plt.figure()
     plt.plot(loss_sequence)
