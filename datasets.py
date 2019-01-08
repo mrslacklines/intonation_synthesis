@@ -7,10 +7,10 @@ import re
 from merlin.io_funcs import htk_io
 from nnmnkwii.frontend import merlin as fe
 from nnmnkwii.io import hts
-from sklearn.preprocessing import MinMaxScaler, Normalizer
+from sklearn.preprocessing import MinMaxScaler
 
 from technical_indicators import make_technical_indicators
-from utils import interpolate_f0, scale
+from utils import scale
 
 
 class HTSDataset(mx.gluon.data.dataset.Dataset):
