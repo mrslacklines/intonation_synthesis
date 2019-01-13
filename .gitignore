@@ -102,3 +102,12 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+*.c
+intonation_synthesis/data
+intonation_synthesis/plots
+intonation_synthesis/ta-lib
+intonation_synthesis/merlin*
+intonation_synthesis/models
+data
+*.pdf

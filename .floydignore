@@ -16,4 +16,10 @@ sdist
 var
 *.pyc
 *.swp
+*.pdf
+*.params
 .DS_Store
+intonation_synthesis/ta-lib
+intonation_synthesis/merlin*
+intonation_synthesis/data
+

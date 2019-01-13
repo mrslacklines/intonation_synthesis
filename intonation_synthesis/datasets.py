@@ -22,7 +22,7 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
             self, hts_dataset_path, file_list=None, transform=None,
             max_size=None, split_ratio=0.8, randomize=True,
             f0_backward_window_len=50, min_f0=None, max_f0=None,
-            min_duration=None, max_duration=None):
+            min_duration=None, max_duration=None, rich_feats=False):
         self.max_size = max_size
         self.split_ratio = split_ratio
         self.randomize = randomize
@@ -47,6 +47,8 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         self.LAST_SYL_IN_WORD = re.compile('\-1\&')
         self.LAST_SYL_IN_PHR = re.compile('\-1\#')
         self.SYL_POS_IN_PHR = re.compile('\-(\d)\#')
+
+        self.rich_feats = rich_feats
 
     def list_files(self):
         if self.file_list is not None:
@@ -249,21 +251,31 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
             new_max=1).fillna(0).values
         target = self.preprocess_features(
             numpy.nan_to_num(target).reshape(-1, 1), normalize=False)
-        # add target scaling ?
-        # add interpolated f0 window
-        f0_window_features = self.add_f0_window(target)
-        f0_technical_indicators = self.add_ti_features(f0_window_features)
-        f0_technical_indicators = self.preprocess_features(
-            f0_technical_indicators.astype('float64'))
         duration_features = self.load_duration_data(filename)
 
-        assert(
-            acoustic_features.shape[0] == duration_features.shape[0] ==
-            linguistic_features.shape[0] == f0_window_features.shape[0] ==
-            f0_technical_indicators.shape[0] == vuv.shape[0])
-        feats = numpy.hstack(
-            [acoustic_features, linguistic_features, vuv, duration_features,
-             f0_window_features, f0_technical_indicators])
+        if self.rich_feats:
+            # add target scaling ?
+            # add interpolated f0 window
+            f0_window_features = self.add_f0_window(target)
+            f0_technical_indicators = self.add_ti_features(f0_window_features)
+            f0_technical_indicators = self.preprocess_features(
+                f0_technical_indicators.astype('float64'))
+            assert(
+                acoustic_features.shape[0] == duration_features.shape[0] ==
+                linguistic_features.shape[0] == vuv.shape[0] ==
+                f0_window_features.shape[0] ==
+                f0_technical_indicators.shape[0])
+            feats = numpy.hstack(
+                [acoustic_features, linguistic_features, vuv,
+                 duration_features, f0_window_features,
+                 f0_technical_indicators])
+        else:
+            assert(
+                acoustic_features.shape[0] == duration_features.shape[0] ==
+                linguistic_features.shape[0] == vuv.shape[0])
+            feats = numpy.hstack(
+                [acoustic_features, linguistic_features, vuv,
+                 duration_features])
 
         if self._transform is not None:
             feats, target = self._transform(feats, target)

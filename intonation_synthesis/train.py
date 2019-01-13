@@ -11,19 +11,20 @@ from utils import pad_array
 
 CPU_COUNT = cpu_count()
 WORKDIR = 'data'
-BATCH_SIZE = 32
+BATCH_SIZE = 8
 DATASET_SIZE_LIMIT = None
 EPOCHS = 200
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.0001
 
 NUM_LAYERS = 3
-HIDDEN_SIZE = 20
+HIDDEN_SIZE = 512
 DROPOUT = 0.2
 USE_MOVING_WINDOW = True
 F0_WINDOW_LEN = 20
 BIDIRECTIONAL = True if not USE_MOVING_WINDOW else False
 TRAIN_ON_GPU = False
-FEATURES_ORDER = 4115
+RICH_FEATS = False
+FEATURES_ORDER = 4115 if RICH_FEATS else 1531
 
 MAX_DURATION = 14950000.0
 MIN_DURATION = 0
@@ -55,6 +56,7 @@ def build_net(
         bidirectional=BIDIRECTIONAL):
     net = mx.gluon.nn.Sequential()
     with net.name_scope():
+        # NTC: bach size, sequence length, input size
         net.add(mx.gluon.rnn.LSTM(
             hidden_size=hidden_size, num_layers=num_layers, dropout=dropout,
             bidirectional=bidirectional, layout='NTC'))
@@ -68,7 +70,8 @@ def test(net=None, test_files=None):
     hts_testset = HTSDataset(
         WORKDIR, file_list=test_files, transform=pad_data,
         f0_backward_window_len=F0_WINDOW_LEN, min_f0=MIN_F0, max_f0=MAX_F0,
-        min_duration=MIN_DURATION, max_duration=MAX_DURATION)
+        min_duration=MIN_DURATION, max_duration=MAX_DURATION,
+        rich_feats=RICH_FEATS)
 
     test_data = gluon.data.DataLoader(
         hts_testset, batch_size=BATCH_SIZE, num_workers=CPU_COUNT)
@@ -96,7 +99,8 @@ def train():
     hts_dataset = HTSDataset(
         WORKDIR, transform=pad_data, max_size=DATASET_SIZE_LIMIT,
         f0_backward_window_len=F0_WINDOW_LEN, min_f0=MIN_F0, max_f0=MAX_F0,
-        min_duration=MIN_DURATION, max_duration=MAX_DURATION)
+        min_duration=MIN_DURATION, max_duration=MAX_DURATION,
+        rich_feats=RICH_FEATS)
 
     hprint('Dataset size: {}'.format(str(len(hts_dataset))))
 
