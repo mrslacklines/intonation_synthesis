@@ -42,7 +42,7 @@ setup(
         "MarkupSafe==1.1.0",
         "matplotlib==3.0.2",
         "mistune==0.8.4",
-        "mxnet==1.3.1",
+        "mxnet-cu92",
         "nbconvert==5.4.0",
         "nbformat==4.4.0",
         "nnmnkwii==0.0.16",

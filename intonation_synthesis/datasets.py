@@ -5,6 +5,7 @@ import pandas
 import random
 import re
 from merlin.io_funcs import htk_io
+from merlin.io_funcs.binary_io import BinaryIOCollection
 from nnmnkwii.frontend import merlin as fe
 from nnmnkwii.io import hts
 from sklearn.preprocessing import MinMaxScaler
@@ -96,16 +97,21 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         df = df.drop('f0', axis=1)
         if self.min_f0 is not None and self.max_f0 is not None:
             df = df.apply(scale, old_min=self.min_f0, old_max=self.max_f0)
-        return df.values
+        return df.values.flatten()
 
     def make_vuv(self, f0):
         return numpy.array([[el, ] for el in numpy.isfinite(f0).astype(int)])
+
+    def load_lf0(self, filename):
+        binary_reader = BinaryIOCollection()
+        return binary_reader.load_binary_file(
+            self.workdir + '/data/lf0/' + filename,
+            1).flatten()
 
     def load_hts_acoustic_data(
             self, cmp_filename, add_ti=False, use_window=False):
         htk_reader = htk_io.HTK_Parm_IO()
         htk_reader.read_htk(self.workdir + '/data/cmp/' + cmp_filename)
-
         target = htk_reader.data[:, self.target_feature_order].copy()
         target = numpy.nan_to_num(target, copy=True)
         # mark unvoiced regions with 0 instead of -inf
@@ -242,40 +248,45 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         linguistic_features = self.load_linguistic_features(fullcontext_label)
         acoustic_features, target = self.load_hts_acoustic_data(
             basename + '.cmp')
+
+        # target = self.load_lf0(basename + '.lf0')
+        if target.shape[0] == (linguistic_features.shape[0] + 1):
+            target = target[:-1]
         vuv = self.make_vuv(target)
         acoustic_features = self.preprocess_features(
             acoustic_features)
         target_df = pandas.DataFrame(target)
-        target_df.apply(
+        target = target_df.apply(
             scale, old_min=self.min_f0, old_max=self.max_f0, new_min=-1,
-            new_max=1).fillna(0).values
+            new_max=1).fillna(0).values.flatten()
         target = self.preprocess_features(
             numpy.nan_to_num(target).reshape(-1, 1), normalize=False)
         duration_features = self.load_duration_data(filename)
 
-        if self.rich_feats:
-            # add target scaling ?
-            # add interpolated f0 window
-            f0_window_features = self.add_f0_window(target)
-            f0_technical_indicators = self.add_ti_features(f0_window_features)
-            f0_technical_indicators = self.preprocess_features(
-                f0_technical_indicators.astype('float64'))
-            assert(
-                acoustic_features.shape[0] == duration_features.shape[0] ==
-                linguistic_features.shape[0] == vuv.shape[0] ==
-                f0_window_features.shape[0] ==
-                f0_technical_indicators.shape[0])
-            feats = numpy.hstack(
-                [acoustic_features, linguistic_features, vuv,
-                 duration_features, f0_window_features,
-                 f0_technical_indicators])
-        else:
-            assert(
-                acoustic_features.shape[0] == duration_features.shape[0] ==
-                linguistic_features.shape[0] == vuv.shape[0])
-            feats = numpy.hstack(
-                [acoustic_features, linguistic_features, vuv,
-                 duration_features])
+        # if self.rich_feats:
+        #     # add target scaling ?
+        #     # add interpolated f0 window
+        #     f0_window_features = self.add_f0_window(target)
+        #     f0_technical_indicators = self.add_ti_features(f0_window_features)
+        #     f0_technical_indicators = self.preprocess_features(
+        #         f0_technical_indicators.astype('float64'))
+        #     assert(
+        #         acoustic_features.shape[0] == duration_features.shape[0] ==
+        #         linguistic_features.shape[0] == vuv.shape[0] ==
+        #         f0_window_features.shape[0] ==
+        #         f0_technical_indicators.shape[0])
+        #     feats = numpy.hstack(
+        #         [acoustic_features, linguistic_features, vuv,
+        #          duration_features, f0_window_features,
+        #          f0_technical_indicators])
+        # # READD ACOUSTIC FEATS
+        # else:
+        assert(
+            target.shape[0] ==
+            linguistic_features.shape[0] == acoustic_features.shape[0] == \
+            vuv.shape[0] == duration_features.shape[0])
+        feats = numpy.hstack(
+            [linguistic_features, acoustic_features, vuv, duration_features])
 
         if self._transform is not None:
             feats, target = self._transform(feats, target)
@@ -283,6 +294,8 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         feats, target = \
             mx.nd.array(numpy.nan_to_num(feats)), \
             mx.nd.array(numpy.nan_to_num(target))
+        feats.wait_to_read()
+        target.wait_to_read()
         return feats, target
 
     def __len__(self):
