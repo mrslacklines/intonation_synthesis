@@ -13,7 +13,7 @@ from utils import pad_array
 
 
 CPU_COUNT = round(cpu_count() / 2)
-WORKDIR = '/data'
+WORKDIR = 'data'
 BATCH_SIZE = CPU_COUNT * 4
 DATASET_SIZE_LIMIT = 400
 EPOCHS = 50
@@ -26,7 +26,7 @@ DROPOUT = 0.2
 USE_MOVING_WINDOW = True
 F0_WINDOW_LEN = 20
 BIDIRECTIONAL = True if not USE_MOVING_WINDOW else False
-TRAIN_ON_GPU = True
+TRAIN_ON_GPU = False
 RICH_FEATS = False
 # FEATURES_ORDER = 4115 if RICH_FEATS else 1531
 FEATURES_ORDER = 1531
@@ -68,7 +68,7 @@ def build_net(
 def test(net=None, test_files=None):
 
     if TRAIN_ON_GPU:
-        net.collect_params().reset_ctx(mx.gpu(0))
+        net.collect_params().reset_ctx(mx.gpu())
 
     hts_testset = HTSDataset(
         WORKDIR, file_list=test_files, transform=pad_data,
@@ -86,8 +86,8 @@ def test(net=None, test_files=None):
     for X_batch, y_batch in test_data:
         gc.collect()
         if TRAIN_ON_GPU:
-            X_batch = X_batch.as_in_context(mx.gpu(0))
-            y_batch = y_batch.as_in_context(mx.gpu(0))
+            X_batch = X_batch.as_in_context(mx.gpu())
+            y_batch = y_batch.as_in_context(mx.gpu())
         with autograd.predict_mode():
             predictions = net(X_batch)
             try:
@@ -132,7 +132,7 @@ def train():
     net = build_net()
     net.collect_params().initialize(mx.init.Xavier(), ctx=model_ctx)
     if TRAIN_ON_GPU:
-        net.collect_params().reset_ctx(mx.gpu(0))
+        net.collect_params().reset_ctx(mx.gpu())
     trainer = gluon.Trainer(
         net.collect_params(), 'sgd', {'learning_rate': LEARNING_RATE})
     l2loss = mx.gluon.loss.L2Loss()
@@ -145,8 +145,8 @@ def train():
         for X_batch, y_batch in train_data:
             gc.collect()
             if TRAIN_ON_GPU:
-                X_batch = X_batch.as_in_context(mx.gpu(0))
-                y_batch = y_batch.as_in_context(mx.gpu(0))
+                X_batch = X_batch.as_in_context(mx.gpu())
+                y_batch = y_batch.as_in_context(mx.gpu())
             # X_batch.wait_to_read()
             # y_batch.wait_to_read()
             with autograd.record():
