@@ -249,7 +249,6 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         acoustic_features, target = self.load_hts_acoustic_data(
             basename + '.cmp')
 
-        # target = self.load_lf0(basename + '.lf0')
         if target.shape[0] == (linguistic_features.shape[0] + 1):
             target = target[:-1]
         vuv = self.make_vuv(target)
@@ -263,40 +262,41 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
             numpy.nan_to_num(target).reshape(-1, 1), normalize=False)
         duration_features = self.load_duration_data(filename)
 
-        # if self.rich_feats:
-        #     # add target scaling ?
-        #     # add interpolated f0 window
-        #     f0_window_features = self.add_f0_window(target)
-        #     f0_technical_indicators = self.add_ti_features(f0_window_features)
-        #     f0_technical_indicators = self.preprocess_features(
-        #         f0_technical_indicators.astype('float64'))
-        #     assert(
-        #         acoustic_features.shape[0] == duration_features.shape[0] ==
-        #         linguistic_features.shape[0] == vuv.shape[0] ==
-        #         f0_window_features.shape[0] ==
-        #         f0_technical_indicators.shape[0])
-        #     feats = numpy.hstack(
-        #         [acoustic_features, linguistic_features, vuv,
-        #          duration_features, f0_window_features,
-        #          f0_technical_indicators])
-        # # READD ACOUSTIC FEATS
-        # else:
-        assert(
-            target.shape[0] ==
-            linguistic_features.shape[0] == acoustic_features.shape[0] == \
-            vuv.shape[0] == duration_features.shape[0])
-        feats = numpy.hstack(
-            [linguistic_features, acoustic_features, vuv, duration_features])
+        if self.rich_feats:
+            # add target scaling ?
+            # add interpolated f0 window
+            f0_window_features = self.add_f0_window(target)
+            f0_technical_indicators = self.add_ti_features(f0_window_features)
+            f0_technical_indicators = self.preprocess_features(
+                f0_technical_indicators.astype('float64'))
+            assert(
+                acoustic_features.shape[0] == duration_features.shape[0] ==
+                linguistic_features.shape[0] == vuv.shape[0] ==
+                f0_window_features.shape[0] ==
+                f0_technical_indicators.shape[0])
+            feats = numpy.hstack(
+                [acoustic_features, linguistic_features, vuv,
+                 duration_features, f0_window_features,
+                 f0_technical_indicators])
+        # READD ACOUSTIC FEATS
+        else:
+            assert(
+                target.shape[0] ==
+                linguistic_features.shape[0] == acoustic_features.shape[0] ==
+                vuv.shape[0] == duration_features.shape[0])
+            feats = numpy.hstack(
+                [linguistic_features, acoustic_features, vuv,
+                 duration_features])
 
-        if self._transform is not None:
-            feats, target = self._transform(feats, target)
+            if self._transform is not None:
+                feats, target = self._transform(feats, target)
 
-        feats, target = \
-            mx.nd.array(numpy.nan_to_num(feats)), \
-            mx.nd.array(numpy.nan_to_num(target))
-        feats.wait_to_read()
-        target.wait_to_read()
-        return feats, target
+            feats, target = \
+                mx.nd.array(numpy.nan_to_num(feats)), \
+                mx.nd.array(numpy.nan_to_num(target))
+            feats.wait_to_read()
+            target.wait_to_read()
+            return feats, target
 
     def __len__(self):
         return len(self.data)
