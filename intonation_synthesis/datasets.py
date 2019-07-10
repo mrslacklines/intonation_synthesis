@@ -10,7 +10,6 @@ from nnmnkwii.frontend import merlin as fe
 from nnmnkwii.io import hts
 from sklearn.preprocessing import MinMaxScaler
 
-from technical_indicators import make_technical_indicators
 from utils import scale
 
 
@@ -24,6 +23,7 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
             max_size=None, split_ratio=0.8, randomize=True,
             f0_backward_window_len=50, min_f0=None, max_f0=None,
             min_duration=None, max_duration=None, rich_feats=False):
+
         self.max_size = max_size
         self.split_ratio = split_ratio
         self.randomize = randomize
@@ -237,6 +237,14 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         df.fillna(0, inplace=True)
         if self.min_f0 is not None and self.max_f0 is not None:
             df = df.apply(scale, old_min=self.min_f0, old_max=self.max_f0)
+        if self.rich_feats:
+            # inline import only in case we want to use TA
+            # prevents massive installs on AWS containers
+            try:
+                from technical_indicators import make_technical_indicators
+            except ImportError:
+                raise ImportError(
+                    'Please make sure TALib is installed properly..')
         df = make_technical_indicators(df)
         return df
 
