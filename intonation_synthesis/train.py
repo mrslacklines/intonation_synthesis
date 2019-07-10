@@ -103,7 +103,7 @@ def train():
         os.makedirs('models')
 
     hts_dataset = HTSDataset(
-        settings.WORKDIR + 'input/data/training', transform=pad_data,
+        settings.WORKDIR + 'input/training', transform=pad_data,
         max_size=settings.DATASET_SIZE_LIMIT,
         f0_backward_window_len=const.F0_WINDOW_LEN, min_f0=const.MIN_F0,
         max_f0=const.MAX_F0, min_duration=const.MIN_DURATION,

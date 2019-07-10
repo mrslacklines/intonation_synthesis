@@ -1,5 +1,7 @@
 FROM nvidia/cuda:9.0-base-ubuntu16.04
 
+# ENV TRAIN_ON_GPU True
+
 RUN apt-get -y update
 RUN apt-get install -y --fix-missing --no-install-recommends \
     build-essential \

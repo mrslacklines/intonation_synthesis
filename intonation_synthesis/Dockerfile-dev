@@ -1,5 +1,7 @@
 FROM nvidia/cuda:9.0-base-ubuntu16.04
 
+# ENV TRAIN_ON_GPU True
+
 RUN apt-get -y update
 RUN apt-get install -y --fix-missing --no-install-recommends \
     build-essential \
@@ -32,7 +34,6 @@ RUN apt-get install -y --fix-missing --no-install-recommends \
 RUN mkdir -p /app
 WORKDIR /app
 
-RUN mkdir -p /opt/ml/input/training
 RUN mkdir -p /opt/ml/input/config
 RUN mkdir -p /opt/ml/model
 RUN mkdir -p /app/entrypoints
