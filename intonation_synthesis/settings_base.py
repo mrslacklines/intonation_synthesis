@@ -11,7 +11,7 @@ DATASET_SIZE_LIMIT = None
 
 try:
     TRAIN_ON_GPU = os.environ['TRAIN_ON_GPU'] and not DEBUG
-except KeyError:
+except Exception:
     TRAIN_ON_GPU = False
 
 MULTI_PRECISION = False

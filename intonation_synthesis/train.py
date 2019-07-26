@@ -41,12 +41,9 @@ def pad_data(features, target, max_seq_len=const.MAX_LEN):
     return features_padded, target_padded
 
 
-def save(net, created=False):
-    if created:
-        model_filename = settings.WORKDIR + '/model/{}.params'.format(
-            datetime.datetime.now().strftime("%B_%d_%Y_%I%M%p"))
-    else:
-        model_filename = 'intonation'
+def save(net, model_dir="/model/"):
+    model_filename = settings.WORKDIR + model_dir + "{}.params".format(
+        datetime.datetime.now().strftime("%B_%d_%Y_%I%M%p"))
 
     net.save_parameters(model_filename)
 
@@ -103,7 +100,7 @@ def train():
         os.makedirs('models')
 
     hts_dataset = HTSDataset(
-        settings.WORKDIR + 'input/training', transform=pad_data,
+        settings.WORKDIR + 'input/data/training', transform=pad_data,
         max_size=settings.DATASET_SIZE_LIMIT,
         f0_backward_window_len=const.F0_WINDOW_LEN, min_f0=const.MIN_F0,
         max_f0=const.MAX_F0, min_duration=const.MIN_DURATION,
@@ -159,7 +156,8 @@ def train():
             print("Epoch {}, mse: {}".format(e, mse[1]))
             print("Epoch {}, loss: {}".format(e, numpy.mean(loss.asnumpy())))
 
-    save(net)
+    if settings.DEBUG:
+        save(net)
 
     return net
 

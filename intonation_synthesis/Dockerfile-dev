@@ -35,6 +35,7 @@ RUN mkdir -p /app
 WORKDIR /app
 
 RUN mkdir -p /opt/ml/input/config
+RUN mkdir -p /opt/ml/input/data/training
 RUN mkdir -p /opt/ml/model
 RUN mkdir -p /app/entrypoints
 
@@ -48,7 +49,8 @@ ADD nginx.conf .
 ADD predictor.py .
 ADD utils.py .
 ADD const.py .
-ADD settings.py ./settings.py
+ADD settings_base.py ./settings_base.py
+ADD settings_dev.py ./settings.py
 
 ADD hyperparameters.json /opt/ml/input/config
 
@@ -63,4 +65,4 @@ ADD serve.sh /app/entrypoints/serve
 RUN chmod +x /app/entrypoints/train /app/entrypoints/serve
 ENV PATH=/app/entrypoints:${PATH}
 
-ENTRYPOINT ["python3","train.py"]
+# ENTRYPOINT ["python3","train.py"]

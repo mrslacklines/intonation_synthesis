@@ -46,6 +46,7 @@ ADD nginx.conf .
 ADD predictor.py .
 ADD utils.py .
 ADD const.py .
+ADD settings_base.py ./settings_base.py
 ADD settings_prod.py ./settings.py
 
 ADD requirements.txt .
