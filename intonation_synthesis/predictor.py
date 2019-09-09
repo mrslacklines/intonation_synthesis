@@ -34,7 +34,7 @@ class ScoringService(object):
         if cls.model is None:
             cls.model = build_net(
                 HIDDEN_SIZE, NUM_LAYERS, DROPOUT, BIDIRECTIONAL, BATCH_SIZE,
-                mx.cpu(), settings.MULTI_PRECISION)
+                mx.cpu())
         cls.model.load_parameters(
             settings.WORKDIR + '/model/intonation.params')
         return cls.model

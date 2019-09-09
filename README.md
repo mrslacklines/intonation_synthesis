@@ -17,7 +17,7 @@ In order to run the training container locally you need to mount you dataset to 
 
 If your data lives in `/media/tomaszk/DANE2/Speech_archive/HTS-demo_AMU_PL_ILO_STRAIGHT` on the host machine like mine does, you can simply:
 
-`docker run -it -v /media/tomaszk/DANE2/Speech_archive/HTS-demo_AMU_PL_ILO_STRAIGHT:/opt/ml/input/training intonation-dev`
+`docker run -it -v /media/tomaszk/DANE2/Speech_archive/HTS-demo_AMU_PL_ILO_STRAIGHT:/opt/ml/input/data/training intonation-dev`
 
 ## Run training on AWS SageMaker
 
@@ -52,7 +52,7 @@ estimator = sage.estimator.Estimator(
     })
 
 # start training
-estimator.fit({'training': 's3://intonation/'})
+estimator.fit({'training': 's3://intonation/'}, wait=True)
 ```
 
 You might need to adjust the variables to suit your needs.

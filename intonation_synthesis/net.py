@@ -1,7 +1,6 @@
 import mxnet as mx
 
 import const
-import settings
 
 
 class Net(mx.gluon.HybridBlock):
@@ -19,12 +18,8 @@ class Net(mx.gluon.HybridBlock):
             dropout=dropout, bidirectional=bidirectional, layout='NTC')
         self.output_layer = mx.gluon.nn.Dense(const.MAX_LEN, flatten=True)
 
-        if settings.MULTI_PRECISION:
-            self.lstm.cast('float16')
-            self.output_layer.cast('float16')
-
     def forward(self, batch):
-        dtype = 'float16' if settings.MULTI_PRECISION else 'float32'
+        dtype = 'float32'
         states = self.lstm.begin_state(
             self.batch_size, ctx=self.model_ctx, dtype=dtype)
         output, _ = self.lstm(batch, states)
@@ -34,20 +29,30 @@ class Net(mx.gluon.HybridBlock):
 
 def build_net(
         hidden_size, num_layers, dropout, bidirectional, batch_size, model_ctx,
-        multi_precision=False):
+        net_type='cnn'):
 
-    if multi_precision:
-        net = Net()
-        with net.name_scope():
-            net.hybridize()
-            net.cast('float16')
-    else:
-        net = mx.gluon.nn.HybridSequential()
-        with net.name_scope():
+    net = mx.gluon.nn.HybridSequential()
+    with net.name_scope():
+        if net_type == 'cnn':
+            for layer_no in range(num_layers):
+                net.add(mx.gluon.nn.Conv1D(
+                    channels=128, kernel_size=5, activation='relu'))
+                net.add(mx.gluon.nn.Conv1D(
+                    channels=128, kernel_size=5, activation='relu'))
+                net.add(mx.gluon.nn.Dropout(dropout))
+                net.add(mx.gluon.nn.MaxPool1D(
+                    pool_size=2, strides=2))
+                # The Flatten layer collapses all axis,
+                # except the first one, into one axis.
+                net.add(mx.gluon.nn.Flatten())
+                net.add(mx.gluon.nn.Dense(hidden_size, activation="relu"))
+            net.add(mx.gluon.nn.Dense(const.MAX_LEN))
+        elif net_type == 'lstm':
             # NTC: bach size, sequence length, input size
             net.add(mx.gluon.rnn.LSTM(
                 hidden_size=hidden_size, num_layers=num_layers,
-                dropout=dropout, bidirectional=bidirectional, layout='NTC'))
+                dropout=dropout, bidirectional=bidirectional,
+                layout='NTC'))
             net.add(mx.gluon.nn.Dense(const.MAX_LEN, flatten=True))
 
     return net

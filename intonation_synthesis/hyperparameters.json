@@ -1,9 +1,10 @@
 {
     "epochs": 2,
     "learning_rate": 0.01,
-    "num_layers": 1,
-    "hidden_size": 32,
+    "num_layers": 3,
+    "hidden_size": 64,
     "dropout": 0.2,
-    "batch_size": 1,
-    "bidirectional": false
+    "batch_size": 4,
+    "bidirectional": false,
+    "net_type": "lstm"
 }

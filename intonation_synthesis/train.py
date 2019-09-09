@@ -13,11 +13,6 @@ from net import build_net
 from utils import hprint, pad_array
 
 
-if settings.TRAIN_ON_GPU:
-    MODEL_CTX = mx.gpu()
-else:
-    MODEL_CTX = mx.cpu()
-
 with open(
         settings.WORKDIR + '/input/config/hyperparameters.json') as json_file:
     hyperparameters = json.load(json_file)
@@ -30,6 +25,7 @@ NUM_LAYERS = int(hyperparameters.get('num_layers'))
 DROPOUT = float(hyperparameters.get('dropout'))
 LEARNING_RATE = float(hyperparameters.get('learning_rate'))
 BIDIRECTIONAL = bool(hyperparameters.get('bidirectional'))
+NET_TYPE = hyperparameters.get('net_type') or 'lstm'
 
 
 def pad_data(features, target, max_seq_len=const.MAX_LEN):
@@ -41,18 +37,18 @@ def pad_data(features, target, max_seq_len=const.MAX_LEN):
     return features_padded, target_padded
 
 
-def save(net, model_dir="/model/"):
+def save(net, epoch, model_dir="/model/"):
     model_filename = settings.WORKDIR + model_dir + "{}.params".format(
         datetime.datetime.now().strftime("%B_%d_%Y_%I%M%p"))
 
-    net.save_parameters(model_filename)
+    net.export(model_filename, epoch=epoch)
 
 
 def test(net=None, test_files=None):
     hprint("Testing...")
 
     if settings.TRAIN_ON_GPU:
-        net.collect_params().reset_ctx(mx.gpu())
+        net.collect_params().reset_ctx(settings.MODEL_CTX)
 
     hts_testset = HTSDataset(
         settings.WORKDIR + 'input/data/testing', file_list=test_files,
@@ -66,15 +62,15 @@ def test(net=None, test_files=None):
         num_workers=settings.CPU_COUNT)
 
     for X_batch, y_batch in test_data:
-        if settings.TRAIN_ON_GPU:
-            X_batch = X_batch.as_in_context(mx.gpu())
-            y_batch = y_batch.as_in_context(mx.gpu())
+        if settings.TRAIN_ON_GPU and settings.GPU_COUNT <= 1:
+            X_batch = X_batch.as_in_context(settings.MODEL_CTX)
+            y_batch = y_batch.as_in_context(settings.MODEL_CTX)
+        elif settings.TRAIN_ON_GPU and settings.GPU_COUNT > 1:
+            pass
         else:
-            X_batch = X_batch.as_in_context(mx.cpu())
-            y_batch = y_batch.as_in_context(mx.cpu())
-        if settings.MULTI_PRECISION:
-            X_batch = X_batch.astype('float16', copy=False)
-            y_batch = y_batch.astype('float16', copy=False)
+            X_batch = X_batch.as_in_context(settings.MODEL_CTX)
+            y_batch = y_batch.as_in_context(settings.MODEL_CTX)
+
         with autograd.predict_mode():
             predictions = net(X_batch)
 
@@ -85,9 +81,11 @@ def test(net=None, test_files=None):
                         'float32').asnumpy().tolist(), 'r-',
                     y_batch[sample_no, :].astype(
                         'float32').asnumpy().tolist(), 'b-')
-                f.savefig("plots/pred_vs_real_sample_{}_{}.pdf".format(
-                    sample_no,
-                    datetime.datetime.now().strftime("%B_%d_%Y_%I%M%p")),
+                f.savefig(
+                    settings.WORKDIR +
+                    "output/pred_vs_real_sample_{}_{}.pdf".format(
+                        sample_no,
+                        datetime.datetime.now().strftime("%B_%d_%Y_%I%M%p")),
                     bbox_inches='tight')
                 plt.close('all')
 
@@ -112,56 +110,103 @@ def train():
         hts_dataset, batch_size=BATCH_SIZE,
         num_workers=settings.CPU_COUNT, last_batch='discard')
     net = build_net(
-        HIDDEN_SIZE, NUM_LAYERS, DROPOUT, BIDIRECTIONAL, BATCH_SIZE, MODEL_CTX,
-        settings.MULTI_PRECISION)
-    net.collect_params().initialize(mx.init.Xavier(), ctx=MODEL_CTX)
+        HIDDEN_SIZE, NUM_LAYERS, DROPOUT, BIDIRECTIONAL, BATCH_SIZE,
+        settings.MODEL_CTX, net_type=NET_TYPE)
+    net.collect_params().initialize(
+        mx.init.Xavier(), force_reinit=True, ctx=settings.MODEL_CTX)
+
     if settings.TRAIN_ON_GPU:
         net.collect_params().reset_ctx(mx.gpu())
     trainer = gluon.Trainer(
         net.collect_params(), 'sgd',
-        {'learning_rate': LEARNING_RATE, 'multi_precision': True})
+        {'learning_rate': LEARNING_RATE},
+        compression_params={'type': '2bit', 'threshold': 0.5})
     l2loss = mx.gluon.loss.L2Loss()
+
+    net.hybridize()
 
     hprint("Training... ({} epochs)".format(EPOCHS))
 
     if settings.DEBUG:
         mean_squared_error = mx.metric.MSE()
 
+    loss_history = []
+    mse_history = []
+
     for e in range(EPOCHS):
-        for X_batch, y_batch in train_data:
+        hprint("Epoch: {}".format(e))
+        total_loss = 0
+        if settings.TRAIN_ON_GPU and settings.GPU_COUNT > 1:
+            mdevice_loss = 0.0
+        for batch_no, (X_batch, y_batch) in enumerate(train_data):
             X_batch.wait_to_read()
             y_batch.wait_to_read()
-            if settings.TRAIN_ON_GPU:
-                X_batch = X_batch.as_in_context(mx.gpu())
-                y_batch = y_batch.as_in_context(mx.gpu())
+            if settings.TRAIN_ON_GPU and settings.GPU_COUNT > 1:
+                data_list = gluon.utils.split_and_load(
+                    X_batch, settings.MODEL_CTX[:BATCH_SIZE])
+                label_list = gluon.utils.split_and_load(
+                    y_batch, settings.MODEL_CTX[:BATCH_SIZE])
+            elif settings.TRAIN_ON_GPU and settings.GPU_COUNT <= 1:
+                X_batch = X_batch.as_in_context(settings.MODEL_CTX)
+                y_batch = y_batch.as_in_context(settings.MODEL_CTX)
             else:
-                X_batch = X_batch.as_in_context(mx.cpu())
-                y_batch = y_batch.as_in_context(mx.cpu())
-            if settings.MULTI_PRECISION:
-                X_batch = X_batch.astype('float16', copy=False)
-                y_batch = y_batch.astype('float16', copy=False)
-            with autograd.record():
-                output = net(X_batch)
-                loss = l2loss(output, y_batch)
-            loss.backward()
-            trainer.step(BATCH_SIZE)
+                X_batch = X_batch.as_in_context(settings.MODEL_CTX)
+                y_batch = y_batch.as_in_context(settings.MODEL_CTX)
 
-            if settings.DEBUG:
-                mean_squared_error.update(
-                    labels=output, preds=y_batch[:, :, 0])
-                mse = mean_squared_error.get()
+            if settings.TRAIN_ON_GPU and settings.GPU_COUNT > 1:
+                with autograd.record():
+                    outputs = [net(X) for X in data_list]
+                    losses = [
+                        l2loss(output, y) for output, y
+                        in zip(outputs, label_list)]
+                for l in losses:
+                    l.backward()
+                for l in losses:
+                    l.wait_to_read()
+                trainer.step(BATCH_SIZE, ignore_stale_grad=True)
+                # sum losses over all devices
+                mdevice_loss += sum([l.sum().asscalar() for l in losses])
+                total_loss += mx.nd.sum(mdevice_loss).asscalar()
 
-        hprint("Epoch: {}".format(e))
-        if settings.DEBUG:
-            print("Epoch {}, mse: {}".format(e, mse[1]))
-            print("Epoch {}, loss: {}".format(e, numpy.mean(loss.asnumpy())))
+            else:
+                with autograd.record():
+                    output = net(X_batch)
+                    loss = l2loss(output, y_batch)
+                loss.backward()
+                loss.wait_to_read()
+                trainer.step(BATCH_SIZE)
 
-    if settings.DEBUG:
-        save(net)
+                total_loss += mx.nd.sum(loss).asscalar()
+
+                if settings.DEBUG:
+                    mean_squared_error.update(
+                        labels=output, preds=y_batch[:, :, 0])
+                    mse = mean_squared_error.get()
+
+        current_loss = total_loss / len(train_data) / BATCH_SIZE
+
+        print('Loss = {}; MSE = {};'.format(
+            current_loss,
+            mse[1]))
+
+        loss_history.append(current_loss)
+        mse_history.append(mse[1])
+
+    f = plt.figure()
+    plt.plot(loss_history, 'r-')
+    f.savefig(
+        settings.WORKDIR +
+        "output/loss_{}.pdf".format(
+            datetime.datetime.now().strftime("%B_%d_%Y_%I%M%p")),
+        bbox_inches='tight')
+    plt.close('all')
+
+    save(net, e)
+
+    test(net, hts_dataset.test_data)
 
     return net
 
 
 if __name__ == '__main__':
-    with mx.Context(MODEL_CTX):
-        train()
+    train()

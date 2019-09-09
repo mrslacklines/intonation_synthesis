@@ -36,7 +36,9 @@ WORKDIR /app
 
 RUN mkdir -p /opt/ml/input/config
 RUN mkdir -p /opt/ml/input/data/training
+RUN ln -s /opt/ml/input/data/training/ /opt/ml/input/data/testing 
 RUN mkdir -p /opt/ml/model
+RUN mkdir -p /opt/ml/output
 RUN mkdir -p /app/entrypoints
 
 ADD __init__.py .

@@ -11,6 +11,7 @@ from nnmnkwii.io import hts
 from sklearn.preprocessing import MinMaxScaler
 
 from utils import scale
+from settings import MODEL_CTX
 
 
 class HTSDataset(mx.gluon.data.dataset.Dataset):
@@ -35,6 +36,9 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         self._transform = transform
         self.question_file_name = \
             self.workdir + '/data/questions/questions_qst001.hed'
+        # Smaller set of contextual linguistic features:
+        # self.question_file_name = \
+        #     self.workdir + '/data/questions/questions_qst001_no_phoneme_id.hed'
         self.list_files()
         self.load_hed_questions()
 
@@ -302,9 +306,8 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
             feats, target = \
                 mx.nd.array(numpy.nan_to_num(feats)), \
                 mx.nd.array(numpy.nan_to_num(target))
-            feats.wait_to_read()
-            target.wait_to_read()
-            return feats, target
+
+        return feats, target
 
     def __len__(self):
         return len(self.data)
