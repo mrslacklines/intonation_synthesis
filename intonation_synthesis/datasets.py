@@ -4,6 +4,7 @@ import os
 import pandas
 import random
 import re
+import tensorflow as tf
 from merlin.io_funcs import htk_io
 from merlin.io_funcs.binary_io import BinaryIOCollection
 from nnmnkwii.frontend import merlin as fe
@@ -11,10 +12,9 @@ from nnmnkwii.io import hts
 from sklearn.preprocessing import MinMaxScaler
 
 from utils import scale
-from settings import MODEL_CTX
 
 
-class HTSDataset(mx.gluon.data.dataset.Dataset):
+class HTSDataset(tf.compat.v2.keras.utils.Sequence):
     """
     A dataset for loading HTS data from disk.
     """
@@ -69,7 +69,12 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
                 file_list = file_list[:self.max_size]
 
             self.data = file_list[:int(len(file_list) * self.split_ratio)]
-            self.test_data = file_list[int(len(file_list) * self.split_ratio):]
+            self._holdout_data = \
+                file_list[int(len(file_list) * self.split_ratio):]
+            self.validation_data = \
+                self._holdout_data[:int(len(self._holdout_data) / 2)]
+            self.test_data = \
+                self._holdout_data[int(len(self._holdout_data) / 2):]
 
     def load_hed_questions(self):
         self.binary_dict, self.continuous_dict = hts.load_question_set(
@@ -254,7 +259,8 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
 
     def __getitem__(self, idx):
         filename = self.data[idx]
-        print("Processing {}..".format(filename))
+        # DEBUG:
+        # print("Processing {}..".format(filename))
         basename, ext = os.path.splitext(filename)
         fullcontext_label = self.load_hts_label(filename)
         linguistic_features = self.load_linguistic_features(fullcontext_label)
@@ -297,15 +303,15 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
                 linguistic_features.shape[0] == acoustic_features.shape[0] ==
                 vuv.shape[0] == duration_features.shape[0])
             feats = numpy.hstack(
-                [linguistic_features, acoustic_features, vuv,
+                [acoustic_features, linguistic_features, vuv,
                  duration_features])
 
             if self._transform is not None:
                 feats, target = self._transform(feats, target)
 
             feats, target = \
-                mx.nd.array(numpy.nan_to_num(feats)), \
-                mx.nd.array(numpy.nan_to_num(target))
+                numpy.nan_to_num(feats), \
+                numpy.nan_to_num(target)
 
         return feats, target
 

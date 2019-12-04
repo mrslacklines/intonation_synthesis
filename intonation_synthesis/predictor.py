@@ -25,7 +25,7 @@ DROPOUT = float(hyperparameters.get('dropout'))
 LEARNING_RATE = float(hyperparameters.get('learning_rate'))
 BIDIRECTIONAL = bool(hyperparameters.get('bidirectional'))
 
-
+# FIXME
 class ScoringService(object):
     model = None
 

@@ -2,8 +2,8 @@ FROM nvidia/cuda:9.0-base-ubuntu16.04
 
 # ENV TRAIN_ON_GPU True
 
-RUN apt-get -y update
-RUN apt-get install -y --fix-missing --no-install-recommends \
+RUN apt update
+RUN apt install -y --fix-missing --no-install-recommends \
     build-essential \
     checkinstall \
     make \
@@ -17,18 +17,7 @@ RUN apt-get install -y --fix-missing --no-install-recommends \
     python3-dev \
     python3-numpy \
     software-properties-common \
-    cuda9.2 \
-    cuda-toolkit-9-2 \
-    cuda-visual-tools-9-2 \
-    cuda-cusparse-dev-9-2 \
-    cuda-cusolver-dev-9-2 \
-    cuda-curand-dev-9-2 \
-    cuda-cufft-dev-9-2 \
-    cuda-cudart-dev-9-2 \
-    cuda-cublas-dev-9-2 \
-    cuda-command-line-tools-9-2 \
-    libcudnn7 \
-    libcudnn7-dev
+    nano
 
 # set working directory
 RUN mkdir -p /app
