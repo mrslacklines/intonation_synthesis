@@ -1,49 +1,53 @@
 import datetime
-import mxnet as mx
+import json
 import numpy
+import os
 from matplotlib import pyplot as plt
 from multiprocessing import cpu_count
-from mxnet import nd, autograd, gluon
+from mxnet import gluon
 
+import const
+import settings
 from datasets import HTSDataset
-from utils import pad_array
+from net import build_net
+from utils import hprint, pad_array
 
 
-CPU_COUNT = cpu_count()
-WORKDIR = 'data'
-BATCH_SIZE = 8
-DATASET_SIZE_LIMIT = None
-EPOCHS = 200
-LEARNING_RATE = 0.0001
+with open(
+        settings.WORKDIR + '/input/config/hyperparameters.json') as json_file:
+    hyperparameters = json.load(json_file)
 
-NUM_LAYERS = 3
-HIDDEN_SIZE = 512
-DROPOUT = 0.2
-USE_MOVING_WINDOW = True
-F0_WINDOW_LEN = 20
-BIDIRECTIONAL = True if not USE_MOVING_WINDOW else False
-TRAIN_ON_GPU = False
-RICH_FEATS = False
-FEATURES_ORDER = 4115 if RICH_FEATS else 1531
+DATASET_SIZE_LIMIT = \
+    int(hyperparameters.get('dataset_size_limit')) \
+    if hyperparameters.get('dataset_size_limit') is not None else None
+BATCH_SIZE = int(hyperparameters.get('batch_size'))
+EPOCHS = int(hyperparameters.get('epochs'))
 
-MAX_DURATION = 14950000.0
-MIN_DURATION = 0
-MIN_F0 = -20.299814419936542
-MAX_F0 = 35.15619563784128
-MAX_LEN = 1900
+HIDDEN_SIZE = int(hyperparameters.get('hidden_size'))
+NUM_LAYERS = int(hyperparameters.get('num_layers'))
+DROPOUT = float(hyperparameters.get('dropout'))
+# Currently not used (ADAM)
+# LEARNING_RATE = float(hyperparameters.get('learning_rate'))
+
+CPU_COUNT = \
+    int(hyperparameters.get('cpu_count')) \
+    if hyperparameters.get('cpu_count') is not None \
+    else round(cpu_count() / 2)
 
 
-model_ctx = mx.cpu()
+def training_report(loss):
+    f = plt.figure()
+    plt.plot(loss, 'b-')
+    f.savefig(
+        settings.WORKDIR +
+        "model/loss_{}.pdf".format(
+            datetime.datetime.now().strftime("%B_%d_%Y_%I%M%p")),
+        bbox_inches='tight')
+    plt.close('all')
 
 
-def hprint(string):
-    print('=' * 50)
-    print(string)
-    print('=' * 50)
-
-
-def pad_data(features, target, max_seq_len=MAX_LEN):
-    X = numpy.ndarray([max_seq_len, FEATURES_ORDER])
+def pad_data(features, target, max_seq_len=const.MAX_LEN):
+    X = numpy.ndarray([max_seq_len, const.FEATURES_ORDER])
     y = numpy.ndarray([max_seq_len, 1])
     features_padded = pad_array(X.shape, features)
     target_padded = pad_array(y.shape, target)
@@ -51,97 +55,107 @@ def pad_data(features, target, max_seq_len=MAX_LEN):
     return features_padded, target_padded
 
 
-def build_net(
-        hidden_size=HIDDEN_SIZE, num_layers=NUM_LAYERS, dropout=DROPOUT,
-        bidirectional=BIDIRECTIONAL):
-    net = mx.gluon.nn.Sequential()
-    with net.name_scope():
-        # NTC: bach size, sequence length, input size
-        net.add(mx.gluon.rnn.LSTM(
-            hidden_size=hidden_size, num_layers=num_layers, dropout=dropout,
-            bidirectional=bidirectional, layout='NTC'))
-        net.add(mx.gluon.nn.Dense(MAX_LEN, flatten=True))
+def save(
+        net, epoch, loss, holdout_data=None, timestamp_files=False,
+        model_dir="/model/"):
+    if timestamp_files:
+        model_filename = settings.WORKDIR + model_dir + "{}.model".format(
+            datetime.datetime.now().strftime("%B_%d_%Y_%I%M%p"))
+    else:
+        model_filename = settings.WORKDIR + model_dir + "model.model"
+    with open("training_report.txt", "a+") as report_file:
+        json.dump(
+            {
+                'epoch': epoch,
+                'loss': loss,
+                'holdout_data': holdout_data,
+            }, report_file)
 
-    return net
+    net.save(model_filename)
 
 
 def test(net=None, test_files=None):
+    hprint("Testing...")
 
     hts_testset = HTSDataset(
-        WORKDIR, file_list=test_files, transform=pad_data,
-        f0_backward_window_len=F0_WINDOW_LEN, min_f0=MIN_F0, max_f0=MAX_F0,
-        min_duration=MIN_DURATION, max_duration=MAX_DURATION,
-        rich_feats=RICH_FEATS)
+        settings.WORKDIR + 'input/data/training', file_list=test_files,
+        transform=pad_data, f0_backward_window_len=const.F0_WINDOW_LEN,
+        min_f0=const.MIN_F0, max_f0=const.MAX_F0,
+        min_duration=const.MIN_DURATION, max_duration=const.MAX_DURATION,
+        rich_feats=const.RICH_FEATS)
 
     test_data = gluon.data.DataLoader(
-        hts_testset, batch_size=BATCH_SIZE, num_workers=CPU_COUNT)
+        hts_testset, batch_size=BATCH_SIZE, last_batch='discard',
+        num_workers=CPU_COUNT)
 
-    pred_list = []
     for X_batch, y_batch in test_data:
-        with autograd.predict_mode():
-            predictions = net(X_batch)
-            pred_list.append((y_batch, predictions))
-
-    for index, (y, pred) in enumerate(pred_list):
-        for sample_no in range(BATCH_SIZE):
+        predictions = net.predict_on_batch(X_batch.asnumpy())
+        for sample_no in range(len(X_batch)):
             f = plt.figure()
             plt.plot(
-                pred[sample_no, :].asnumpy().tolist(), 'r-',
-                y[sample_no, :].asnumpy().tolist(), 'b-')
-            f.savefig("plots/pred_vs_real_sample_{}_{}.pdf".format(
-                sample_no,
-                datetime.datetime.now().strftime("%B_%d_%Y_%I%M%p")),
+                predictions[sample_no, :].numpy().tolist(), 'r-',
+                y_batch[sample_no, :].astype(
+                    'float32').asnumpy().tolist(), 'b-')
+            f.savefig(
+                settings.WORKDIR +
+                "model/pred_vs_real_sample_{}_{}.pdf".format(
+                    sample_no,
+                    datetime.datetime.now().strftime("%B_%d_%Y_%I%M%p")),
                 bbox_inches='tight')
+            plt.close('all')
 
 
 def train():
 
+    if not os.path.exists('plots'):
+        os.makedirs('plots')
+    if not os.path.exists('models'):
+        os.makedirs('models')
+
     hts_dataset = HTSDataset(
-        WORKDIR, transform=pad_data, max_size=DATASET_SIZE_LIMIT,
-        f0_backward_window_len=F0_WINDOW_LEN, min_f0=MIN_F0, max_f0=MAX_F0,
-        min_duration=MIN_DURATION, max_duration=MAX_DURATION,
-        rich_feats=RICH_FEATS)
+        settings.WORKDIR + 'input/data/training', transform=pad_data,
+        max_size=DATASET_SIZE_LIMIT,
+        f0_backward_window_len=const.F0_WINDOW_LEN, min_f0=const.MIN_F0,
+        max_f0=const.MAX_F0, min_duration=const.MIN_DURATION,
+        max_duration=const.MAX_DURATION, rich_feats=const.RICH_FEATS)
+
+    hts_validation_dataset = HTSDataset(
+        settings.WORKDIR + 'input/data/training',
+        file_list=hts_dataset.validation_data,
+        transform=pad_data, f0_backward_window_len=const.F0_WINDOW_LEN,
+        min_f0=const.MIN_F0, max_f0=const.MAX_F0,
+        min_duration=const.MIN_DURATION, max_duration=const.MAX_DURATION,
+        rich_feats=const.RICH_FEATS)
 
     hprint('Dataset size: {}'.format(str(len(hts_dataset))))
 
     train_data = gluon.data.DataLoader(
-        hts_dataset, batch_size=BATCH_SIZE, num_workers=CPU_COUNT)
-    net = build_net()
-    net.collect_params().initialize(mx.init.Xavier(), ctx=model_ctx)
-    if TRAIN_ON_GPU:
-        net.collect_params().reset_ctx(mx.gpu(0))
-    trainer = gluon.Trainer(
-        net.collect_params(), 'sgd', {'learning_rate': LEARNING_RATE})
-    l2loss = mx.gluon.loss.L2Loss()
+        hts_dataset, batch_size=BATCH_SIZE,
+        num_workers=CPU_COUNT, last_batch='discard')
 
-    hprint("Training... ({} epochs)".format(EPOCHS))
+    validation_data = gluon.data.DataLoader(
+        hts_validation_dataset, batch_size=BATCH_SIZE,
+        num_workers=CPU_COUNT, last_batch='discard')
 
-    loss_sequence = []
+    model = build_net(HIDDEN_SIZE, NUM_LAYERS, DROPOUT)
+
+    loss_history = []
+
     for e in range(EPOCHS):
-        cumulative_loss = 0
-        for X_batch, y_batch in train_data:
-            with autograd.record():
-                output = net(X_batch)
-                loss = l2loss(output, y_batch)
-            loss.backward()
-            trainer.step(BATCH_SIZE)
-            mean_loss = nd.mean(loss).asscalar()
-            cumulative_loss += mean_loss
+        hprint("Epoch: {}".format(e))
+        for batch_no, (X_batch, y_batch) in enumerate(train_data):
+            history = model.fit(
+                X_batch.asnumpy(), y_batch.asnumpy(), batch_size=BATCH_SIZE)
+        loss_history.extend(history.history['loss'])
+        training_report(loss_history)
 
-        hprint("Epoch {}, loss: {}".format(
-            e, cumulative_loss / y_batch[0].shape[0]))
-        print('{{"metric": "loss", "value": {}}}'.format(mean_loss))
-        loss_sequence.append(cumulative_loss / y_batch[0].shape[0])
-    f = plt.figure()
-    plt.plot(loss_sequence)
-    f.savefig("plots/loss_sequence_{}.pdf".format(
-        datetime.datetime.now().strftime("%B_%d_%Y_%I%M%p")),
-        bbox_inches='tight')
+        save(
+            model, epoch=e, loss=history.history['loss'][-1],
+            holdout_data=hts_dataset.holdout_data)
 
-    net.save_parameters('models/{}.params'.format(
-        datetime.datetime.now().strftime("%B_%d_%Y_%I%M%p")))
+    test(model, hts_dataset.test_data)
 
-    test(net, hts_dataset.test_data)
+    return model
 
 
 if __name__ == '__main__':

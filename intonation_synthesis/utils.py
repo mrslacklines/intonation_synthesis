@@ -5,6 +5,12 @@ import pandas
 from nnmnkwii.io import hts
 
 
+def hprint(string):
+    print('=' * 50)
+    print(string)
+    print('=' * 50)
+
+
 def add_time_to_full_context_labels_from_fal(workdir):
     """
     Adding start and end times to HTS full context labels from fal labels
@@ -21,8 +27,11 @@ def add_time_to_full_context_labels_from_fal(workdir):
             lab.write(str(full))
 
 
-def pad_array(ref_shape, array):
-    result = numpy.zeros(ref_shape)
+def pad_array(ref_shape, array, pad_with=1):
+    if pad_with == 1:
+        result = numpy.ones(ref_shape)
+    elif pad_with == 0:
+        result = numpy.zeros(ref_shape)
     if len(array.shape) == 1:
         result[:array.shape[0]] = array
     elif len(array.shape) == 2:

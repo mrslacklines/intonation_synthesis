@@ -4,16 +4,17 @@ import os
 import pandas
 import random
 import re
+import tensorflow as tf
 from merlin.io_funcs import htk_io
+from merlin.io_funcs.binary_io import BinaryIOCollection
 from nnmnkwii.frontend import merlin as fe
 from nnmnkwii.io import hts
 from sklearn.preprocessing import MinMaxScaler
 
-from technical_indicators import make_technical_indicators
 from utils import scale
 
 
-class HTSDataset(mx.gluon.data.dataset.Dataset):
+class HTSDataset(tf.compat.v2.keras.utils.Sequence):
     """
     A dataset for loading HTS data from disk.
     """
@@ -23,6 +24,7 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
             max_size=None, split_ratio=0.8, randomize=True,
             f0_backward_window_len=50, min_f0=None, max_f0=None,
             min_duration=None, max_duration=None, rich_feats=False):
+
         self.max_size = max_size
         self.split_ratio = split_ratio
         self.randomize = randomize
@@ -34,6 +36,9 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         self._transform = transform
         self.question_file_name = \
             self.workdir + '/data/questions/questions_qst001.hed'
+        # Smaller set of contextual linguistic features:
+        # self.question_file_name = \
+        #     self.workdir + '/data/questions/questions_qst001_no_phoneme_id.hed'
         self.list_files()
         self.load_hed_questions()
 
@@ -64,7 +69,12 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
                 file_list = file_list[:self.max_size]
 
             self.data = file_list[:int(len(file_list) * self.split_ratio)]
-            self.test_data = file_list[int(len(file_list) * self.split_ratio):]
+            self._holdout_data = \
+                file_list[int(len(file_list) * self.split_ratio):]
+            self.validation_data = \
+                self._holdout_data[:int(len(self._holdout_data) / 2)]
+            self.test_data = \
+                self._holdout_data[int(len(self._holdout_data) / 2):]
 
     def load_hed_questions(self):
         self.binary_dict, self.continuous_dict = hts.load_question_set(
@@ -96,16 +106,21 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         df = df.drop('f0', axis=1)
         if self.min_f0 is not None and self.max_f0 is not None:
             df = df.apply(scale, old_min=self.min_f0, old_max=self.max_f0)
-        return df.values
+        return df.values.flatten()
 
     def make_vuv(self, f0):
         return numpy.array([[el, ] for el in numpy.isfinite(f0).astype(int)])
+
+    def load_lf0(self, filename):
+        binary_reader = BinaryIOCollection()
+        return binary_reader.load_binary_file(
+            self.workdir + '/data/lf0/' + filename,
+            1).flatten()
 
     def load_hts_acoustic_data(
             self, cmp_filename, add_ti=False, use_window=False):
         htk_reader = htk_io.HTK_Parm_IO()
         htk_reader.read_htk(self.workdir + '/data/cmp/' + cmp_filename)
-
         target = htk_reader.data[:, self.target_feature_order].copy()
         target = numpy.nan_to_num(target, copy=True)
         # mark unvoiced regions with 0 instead of -inf
@@ -231,24 +246,36 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
         df.fillna(0, inplace=True)
         if self.min_f0 is not None and self.max_f0 is not None:
             df = df.apply(scale, old_min=self.min_f0, old_max=self.max_f0)
+        if self.rich_feats:
+            # inline import only in case we want to use TA
+            # prevents massive installs on AWS containers
+            try:
+                from technical_indicators import make_technical_indicators
+            except ImportError:
+                raise ImportError(
+                    'Please make sure TALib is installed properly..')
         df = make_technical_indicators(df)
         return df
 
     def __getitem__(self, idx):
         filename = self.data[idx]
-        print("Processing {}..".format(filename))
+        # DEBUG:
+        # print("Processing {}..".format(filename))
         basename, ext = os.path.splitext(filename)
         fullcontext_label = self.load_hts_label(filename)
         linguistic_features = self.load_linguistic_features(fullcontext_label)
         acoustic_features, target = self.load_hts_acoustic_data(
             basename + '.cmp')
+
+        if target.shape[0] == (linguistic_features.shape[0] + 1):
+            target = target[:-1]
         vuv = self.make_vuv(target)
         acoustic_features = self.preprocess_features(
             acoustic_features)
         target_df = pandas.DataFrame(target)
-        target_df.apply(
+        target = target_df.apply(
             scale, old_min=self.min_f0, old_max=self.max_f0, new_min=-1,
-            new_max=1).fillna(0).values
+            new_max=1).fillna(0).values.flatten()
         target = self.preprocess_features(
             numpy.nan_to_num(target).reshape(-1, 1), normalize=False)
         duration_features = self.load_duration_data(filename)
@@ -269,20 +296,23 @@ class HTSDataset(mx.gluon.data.dataset.Dataset):
                 [acoustic_features, linguistic_features, vuv,
                  duration_features, f0_window_features,
                  f0_technical_indicators])
+        # READD ACOUSTIC FEATS
         else:
             assert(
-                acoustic_features.shape[0] == duration_features.shape[0] ==
-                linguistic_features.shape[0] == vuv.shape[0])
+                target.shape[0] ==
+                linguistic_features.shape[0] == acoustic_features.shape[0] ==
+                vuv.shape[0] == duration_features.shape[0])
             feats = numpy.hstack(
                 [acoustic_features, linguistic_features, vuv,
                  duration_features])
 
-        if self._transform is not None:
-            feats, target = self._transform(feats, target)
+            if self._transform is not None:
+                feats, target = self._transform(feats, target)
 
-        feats, target = \
-            mx.nd.array(numpy.nan_to_num(feats)), \
-            mx.nd.array(numpy.nan_to_num(target))
+            feats, target = \
+                numpy.nan_to_num(feats), \
+                numpy.nan_to_num(target)
+
         return feats, target
 
     def __len__(self):
