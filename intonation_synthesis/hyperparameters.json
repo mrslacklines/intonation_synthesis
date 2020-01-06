@@ -1,10 +1,10 @@
 {
-    "epochs": 200,
+    "epochs": 20,
     "learning_rate": 0.1,
     "num_layers": 2,
     "hidden_size": 64,
     "dropout": 0.2,
-    "batch_size": 32,
-    "dataset_size_limit": false,
-    "cpu_count": 0
+    "batch_size": 16,
+    "dataset_size_limit": 160,
+    "cpu_count": 4
 }

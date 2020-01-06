@@ -2,8 +2,8 @@ FROM nvidia/cuda:9.0-base-ubuntu16.04
 
 # ENV TRAIN_ON_GPU True
 
-RUN apt-get -y update
-RUN apt-get install -y --fix-missing --no-install-recommends \
+RUN apt -y update
+RUN apt install -y --fix-missing --no-install-recommends \
     build-essential \
     checkinstall \
     make \
@@ -28,7 +28,8 @@ RUN apt-get install -y --fix-missing --no-install-recommends \
     cuda-cublas-dev-9-2 \
     cuda-command-line-tools-9-2 \
     libcudnn7 \
-    libcudnn7-dev
+    libcudnn7-dev \
+    wget
 
 # set working directory
 RUN mkdir -p /app
@@ -44,10 +45,15 @@ ADD serve.py .
 ADD wsgi.py .
 ADD nginx.conf .
 ADD predictor.py .
+ADD technical_indicators.py .
 ADD utils.py .
 ADD const.py .
 ADD settings_base.py ./settings_base.py
 ADD settings_prod.py ./settings.py
+
+RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
+RUN tar xvf ta-lib-0.4.0-src.tar.gz
+RUN cd ta-lib/ && ./configure && make && make install
 
 ADD requirements.txt .
 RUN pip3 install --upgrade pip

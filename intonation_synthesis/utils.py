@@ -2,11 +2,14 @@ import numpy
 import os
 import pandas
 
+from datetime import datetime
+
 from nnmnkwii.io import hts
 
 
 def hprint(string):
     print('=' * 50)
+    print(datetime.now())
     print(string)
     print('=' * 50)
 

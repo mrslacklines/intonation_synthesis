@@ -67,7 +67,7 @@ def save(
         json.dump(
             {
                 'epoch': epoch,
-                'loss': loss,
+                'loss': str(loss),
                 'holdout_data': holdout_data,
             }, report_file)
 
@@ -86,14 +86,14 @@ def test(net=None, test_files=None):
 
     test_data = gluon.data.DataLoader(
         hts_testset, batch_size=BATCH_SIZE, last_batch='discard',
-        num_workers=CPU_COUNT)
+        num_workers=CPU_COUNT, timeout=5000)
 
     for X_batch, y_batch in test_data:
-        predictions = net.predict_on_batch(X_batch.asnumpy())
+        predictions = net.predict(X_batch.asnumpy(), batch_size=BATCH_SIZE)
         for sample_no in range(len(X_batch)):
             f = plt.figure()
             plt.plot(
-                predictions[sample_no, :].numpy().tolist(), 'r-',
+                predictions[sample_no, :].tolist(), 'r-',
                 y_batch[sample_no, :].astype(
                     'float32').asnumpy().tolist(), 'b-')
             f.savefig(
@@ -131,11 +131,11 @@ def train():
 
     train_data = gluon.data.DataLoader(
         hts_dataset, batch_size=BATCH_SIZE,
-        num_workers=CPU_COUNT, last_batch='discard')
+        num_workers=CPU_COUNT, last_batch='discard', timeout=5000)
 
     validation_data = gluon.data.DataLoader(
         hts_validation_dataset, batch_size=BATCH_SIZE,
-        num_workers=CPU_COUNT, last_batch='discard')
+        num_workers=CPU_COUNT, last_batch='discard', timeout=5000)
 
     model = build_net(HIDDEN_SIZE, NUM_LAYERS, DROPOUT)
 
@@ -144,16 +144,23 @@ def train():
     for e in range(EPOCHS):
         hprint("Epoch: {}".format(e))
         for batch_no, (X_batch, y_batch) in enumerate(train_data):
-            history = model.fit(
-                X_batch.asnumpy(), y_batch.asnumpy(), batch_size=BATCH_SIZE)
-        loss_history.extend(history.history['loss'])
-        training_report(loss_history)
+            hprint("BATCH: {}, TOTAL PROGRESS: {}".format(
+                batch_no + 1, (batch_no + 1) * BATCH_SIZE / (len(hts_dataset))))
+            loss = model.train_on_batch(
+                X_batch.asnumpy(), y_batch.asnumpy())
+            print("LOSS: {}".format(loss))
+            loss_history.append(loss)
 
-        save(
-            model, epoch=e, loss=history.history['loss'][-1],
-            holdout_data=hts_dataset.holdout_data)
+            if not numpy.min(loss_history) or (numpy.min(loss_history) > loss):
+                save(
+                    model, epoch=e, loss=loss,
+                    holdout_data=hts_dataset._holdout_data)
 
-    test(model, hts_dataset.test_data)
+            training_report(loss_history)
+
+            model.trainable = False
+            test(model, hts_dataset.test_data)
+            model.trainable = True
 
     return model
 
