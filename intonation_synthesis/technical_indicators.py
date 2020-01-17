@@ -1,7 +1,7 @@
 import talib
 
 
-def make_technical_indicators(df, periods=[5, 10, 30, 50]):
+def make_technical_indicators(df, periods=[5, 10, 50, 200]):
 
     source_cols = df.columns
     for column in source_cols:

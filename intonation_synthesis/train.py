@@ -2,6 +2,7 @@ import datetime
 import json
 import numpy
 import os
+import tensorflow as tf
 from matplotlib import pyplot as plt
 from multiprocessing import cpu_count
 from mxnet import gluon
@@ -11,6 +12,9 @@ import settings
 from datasets import HTSDataset
 from net import build_net
 from utils import hprint, pad_array
+
+
+tf.compat.v1.disable_eager_execution()
 
 
 with open(
@@ -35,7 +39,7 @@ CPU_COUNT = \
     else round(cpu_count() / 2)
 
 
-def training_report(loss):
+def update_loss_plot(loss):
     f = plt.figure()
     plt.plot(loss, 'b-')
     f.savefig(
@@ -63,15 +67,17 @@ def save(
             datetime.datetime.now().strftime("%B_%d_%Y_%I%M%p"))
     else:
         model_filename = settings.WORKDIR + model_dir + "model.model"
-    with open("training_report.txt", "a+") as report_file:
+    with open(
+            settings.WORKDIR + model_dir + "training_report.txt", "a+"
+    ) as report_file:
         json.dump(
             {
                 'epoch': epoch,
-                'loss': loss,
+                'loss': str(loss),
                 'holdout_data': holdout_data,
             }, report_file)
 
-    net.save(model_filename)
+        tf.saved_model.save(net, model_filename)
 
 
 def test(net=None, test_files=None):
@@ -86,14 +92,14 @@ def test(net=None, test_files=None):
 
     test_data = gluon.data.DataLoader(
         hts_testset, batch_size=BATCH_SIZE, last_batch='discard',
-        num_workers=CPU_COUNT)
+        num_workers=CPU_COUNT, timeout=5000)
 
     for X_batch, y_batch in test_data:
-        predictions = net.predict_on_batch(X_batch.asnumpy())
+        predictions = net.predict(X_batch.asnumpy(), batch_size=BATCH_SIZE)
         for sample_no in range(len(X_batch)):
             f = plt.figure()
             plt.plot(
-                predictions[sample_no, :].numpy().tolist(), 'r-',
+                predictions[sample_no, :].tolist(), 'r-',
                 y_batch[sample_no, :].astype(
                     'float32').asnumpy().tolist(), 'b-')
             f.savefig(
@@ -131,28 +137,31 @@ def train():
 
     train_data = gluon.data.DataLoader(
         hts_dataset, batch_size=BATCH_SIZE,
-        num_workers=CPU_COUNT, last_batch='discard')
-
-    validation_data = gluon.data.DataLoader(
-        hts_validation_dataset, batch_size=BATCH_SIZE,
-        num_workers=CPU_COUNT, last_batch='discard')
+        num_workers=CPU_COUNT, last_batch='discard', timeout=5000)
 
     model = build_net(HIDDEN_SIZE, NUM_LAYERS, DROPOUT)
 
     loss_history = []
 
     for e in range(EPOCHS):
-        hprint("Epoch: {}".format(e))
+        hprint("EPOCH: {}".format(e))
         for batch_no, (X_batch, y_batch) in enumerate(train_data):
-            history = model.fit(
-                X_batch.asnumpy(), y_batch.asnumpy(), batch_size=BATCH_SIZE)
-        loss_history.extend(history.history['loss'])
-        training_report(loss_history)
+            hprint("BATCH: {}, EPOCH PROGRESS: {}".format(
+                batch_no + 1, (batch_no + 1) * BATCH_SIZE / (len(
+                    hts_dataset)) * 100 + "%"))
+            loss = model.train_on_batch(
+                X_batch.asnumpy(), y_batch.asnumpy())
+            print("LOSS: {}".format(loss))
+            loss_history.append(loss)
 
-        save(
-            model, epoch=e, loss=history.history['loss'][-1],
-            holdout_data=hts_dataset.holdout_data)
+        if (e % 10 == 0):
+            save(
+                model, epoch=e, loss=loss,
+                holdout_data=hts_dataset._holdout_data)
 
+            update_loss_plot(loss_history)
+
+    model.trainable = False
     test(model, hts_dataset.test_data)
 
     return model

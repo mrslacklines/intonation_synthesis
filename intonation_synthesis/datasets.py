@@ -14,7 +14,7 @@ from sklearn.preprocessing import MinMaxScaler
 from utils import scale
 
 
-class HTSDataset(tf.compat.v2.keras.utils.Sequence):
+class HTSDataset(mx.gluon.data.Dataset):
     """
     A dataset for loading HTS data from disk.
     """
@@ -106,7 +106,7 @@ class HTSDataset(tf.compat.v2.keras.utils.Sequence):
         df = df.drop('f0', axis=1)
         if self.min_f0 is not None and self.max_f0 is not None:
             df = df.apply(scale, old_min=self.min_f0, old_max=self.max_f0)
-        return df.values.flatten()
+        return df.values
 
     def make_vuv(self, f0):
         return numpy.array([[el, ] for el in numpy.isfinite(f0).astype(int)])
@@ -235,7 +235,7 @@ class HTSDataset(tf.compat.v2.keras.utils.Sequence):
         return df.values
 
     def preprocess_features(self, features, normalize=False):
-        features = MinMaxScaler(feature_range=(-1, 1)).fit_transform(
+        features = MinMaxScaler(feature_range=(0, 1)).fit_transform(
             features)
 
         return features
@@ -267,23 +267,26 @@ class HTSDataset(tf.compat.v2.keras.utils.Sequence):
         acoustic_features, target = self.load_hts_acoustic_data(
             basename + '.cmp')
 
+
         if target.shape[0] == (linguistic_features.shape[0] + 1):
             target = target[:-1]
         vuv = self.make_vuv(target)
-        acoustic_features = self.preprocess_features(
-            acoustic_features)
-        target_df = pandas.DataFrame(target)
-        target = target_df.apply(
-            scale, old_min=self.min_f0, old_max=self.max_f0, new_min=-1,
-            new_max=1).fillna(0).values.flatten()
-        target = self.preprocess_features(
-            numpy.nan_to_num(target).reshape(-1, 1), normalize=False)
-        duration_features = self.load_duration_data(filename)
+        target = target.reshape(-1, 1)
 
         if self.rich_feats:
+            acoustic_features = self.preprocess_features(
+                acoustic_features)
+            target_df = pandas.DataFrame(target)
+            target = target_df.apply(
+                scale, old_min=self.min_f0, old_max=self.max_f0, new_min=0,
+                new_max=1).fillna(0).values
+            target = self.preprocess_features(
+                numpy.nan_to_num(target), normalize=False)
+            duration_features = self.load_duration_data(filename)
             # add target scaling ?
             # add interpolated f0 window
-            f0_window_features = self.add_f0_window(target)
+            # target = self.preprocess_features(target)
+            f0_window_features = self.add_f0_window(target).astype('float64')
             f0_technical_indicators = self.add_ti_features(f0_window_features)
             f0_technical_indicators = self.preprocess_features(
                 f0_technical_indicators.astype('float64'))
@@ -300,20 +303,19 @@ class HTSDataset(tf.compat.v2.keras.utils.Sequence):
         else:
             assert(
                 target.shape[0] ==
-                linguistic_features.shape[0] == acoustic_features.shape[0] ==
-                vuv.shape[0] == duration_features.shape[0])
+                linguistic_features.shape[0] ==
+                vuv.shape[0])
             feats = numpy.hstack(
-                [acoustic_features, linguistic_features, vuv,
-                 duration_features])
+                [linguistic_features, vuv])
 
-            if self._transform is not None:
-                feats, target = self._transform(feats, target)
+        if self._transform is not None:
+            feats, target = self._transform(feats, target)
 
-            feats, target = \
-                numpy.nan_to_num(feats), \
-                numpy.nan_to_num(target)
+        feats, target = \
+            numpy.nan_to_num(feats), \
+            numpy.nan_to_num(target)
 
-        return feats, target
+        return feats.astype('float64'), target
 
     def __len__(self):
         return len(self.data)

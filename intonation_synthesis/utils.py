@@ -2,11 +2,14 @@ import numpy
 import os
 import pandas
 
+from datetime import datetime
+
 from nnmnkwii.io import hts
 
 
 def hprint(string):
     print('=' * 50)
+    print(datetime.now())
     print(string)
     print('=' * 50)
 
@@ -27,7 +30,7 @@ def add_time_to_full_context_labels_from_fal(workdir):
             lab.write(str(full))
 
 
-def pad_array(ref_shape, array, pad_with=1):
+def pad_array(ref_shape, array, pad_with=0):
     if pad_with == 1:
         result = numpy.ones(ref_shape)
     elif pad_with == 0:
