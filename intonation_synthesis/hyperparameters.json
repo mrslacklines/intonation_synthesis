@@ -4,7 +4,7 @@
     "num_layers": 2,
     "hidden_size": 64,
     "dropout": 0.2,
-    "batch_size": 16,
+    "batch_size": 8,
     "dataset_size_limit": 160,
     "cpu_count": 4
 }
