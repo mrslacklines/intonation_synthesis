@@ -15,9 +15,9 @@ to build for local development.
 ## Run training locally
 In order to run the training container locally you need to mount you dataset to the docker container to emulate the SageMaker environment, i.e.
 
-If your data lives in `/media/tomaszk/DANE2/Speech_archive/HTS-demo_AMU_PL_ILO_STRAIGHT` on the host machine like mine does, you can simply:
+If your data lives in `/media/tomaszk/DANE/Speech_archive/HTS-demo_AMU_PL_ILO_STRAIGHT` on the host machine like mine does, you can simply:
 
-`docker run -it -v /media/tomaszk/DANE2/Speech_archive/HTS-demo_AMU_PL_ILO_STRAIGHT:/opt/ml/input/data/training intonation-dev`
+`docker run -it --ipc="private" --shm-size=8000000000 -v /media/tomaszk/DANE/Speech_archive/HTS-demo_AMU_PL_ILO_STRAIGHT:/opt/ml/input/data/training -v /media/tomaszk/DANE/workspace/intonation:/opt/ml/model intonation-dev`
 
 ## Run training on AWS SageMaker
 
