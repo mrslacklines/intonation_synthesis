@@ -8,5 +8,5 @@ pandas
 scikit-learn
 scipy
 sklearn
-tensorflow
+tensorflow==2.0
 keras-tcn

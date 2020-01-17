@@ -2,6 +2,7 @@ import datetime
 import json
 import numpy
 import os
+import tensorflow as tf
 from matplotlib import pyplot as plt
 from multiprocessing import cpu_count
 from mxnet import gluon
@@ -11,6 +12,9 @@ import settings
 from datasets import HTSDataset
 from net import build_net
 from utils import hprint, pad_array
+
+
+tf.compat.v1.disable_eager_execution()
 
 
 with open(
@@ -35,7 +39,7 @@ CPU_COUNT = \
     else round(cpu_count() / 2)
 
 
-def training_report(loss):
+def update_loss_plot(loss):
     f = plt.figure()
     plt.plot(loss, 'b-')
     f.savefig(
@@ -63,7 +67,9 @@ def save(
             datetime.datetime.now().strftime("%B_%d_%Y_%I%M%p"))
     else:
         model_filename = settings.WORKDIR + model_dir + "model.model"
-    with open("training_report.txt", "a+") as report_file:
+    with open(
+            settings.WORKDIR + model_dir + "training_report.txt", "a+"
+    ) as report_file:
         json.dump(
             {
                 'epoch': epoch,
@@ -71,7 +77,7 @@ def save(
                 'holdout_data': holdout_data,
             }, report_file)
 
-    net.save(model_filename)
+        tf.saved_model.save(net, model_filename)
 
 
 def test(net=None, test_files=None):
@@ -133,34 +139,30 @@ def train():
         hts_dataset, batch_size=BATCH_SIZE,
         num_workers=CPU_COUNT, last_batch='discard', timeout=5000)
 
-    validation_data = gluon.data.DataLoader(
-        hts_validation_dataset, batch_size=BATCH_SIZE,
-        num_workers=CPU_COUNT, last_batch='discard', timeout=5000)
-
     model = build_net(HIDDEN_SIZE, NUM_LAYERS, DROPOUT)
 
     loss_history = []
 
     for e in range(EPOCHS):
-        hprint("Epoch: {}".format(e))
+        hprint("EPOCH: {}".format(e))
         for batch_no, (X_batch, y_batch) in enumerate(train_data):
-            hprint("BATCH: {}, TOTAL PROGRESS: {}".format(
-                batch_no + 1, (batch_no + 1) * BATCH_SIZE / (len(hts_dataset))))
+            hprint("BATCH: {}, EPOCH PROGRESS: {}".format(
+                batch_no + 1, (batch_no + 1) * BATCH_SIZE / (len(
+                    hts_dataset)) * 100 + "%"))
             loss = model.train_on_batch(
                 X_batch.asnumpy(), y_batch.asnumpy())
             print("LOSS: {}".format(loss))
             loss_history.append(loss)
 
-            if not numpy.min(loss_history) or (numpy.min(loss_history) > loss):
-                save(
-                    model, epoch=e, loss=loss,
-                    holdout_data=hts_dataset._holdout_data)
+        if (e % 10 == 0):
+            save(
+                model, epoch=e, loss=loss,
+                holdout_data=hts_dataset._holdout_data)
 
-            training_report(loss_history)
+            update_loss_plot(loss_history)
 
-            model.trainable = False
-            test(model, hts_dataset.test_data)
-            model.trainable = True
+    model.trainable = False
+    test(model, hts_dataset.test_data)
 
     return model
 

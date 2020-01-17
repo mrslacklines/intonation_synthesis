@@ -48,6 +48,8 @@ ADD settings_dev.py ./settings.py
 
 ADD hyperparameters.json /opt/ml/input/config
 
+ADD experiment_draft.py .
+
 # RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && tar xvf ta-lib-0.4.0-src.tar.gz && cd ta-lib/ && ./configure --prefix=/usr && make && make install
 
 ADD requirements-dev.txt .
