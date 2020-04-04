@@ -26,5 +26,6 @@ def build_net(hidden_size, num_layers, dropout, gpus=0):
             model, gpus=gpus, cpu_merge=False, cpu_relocation=True)
 
     model.compile(optimizer='adam', loss='mse')
+    print(model.summary())
 
     return model

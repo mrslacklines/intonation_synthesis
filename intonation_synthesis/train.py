@@ -1,6 +1,7 @@
 import datetime
 import json
 import numpy
+import os
 import tensorflow as tf
 from matplotlib import pyplot as plt
 from multiprocessing import cpu_count
@@ -14,8 +15,15 @@ from utils import hprint, pad_array
 
 # tf.compat.v1.disable_eager_execution()
 
-with open(
-        settings.WORKDIR + '/input/config/hyperparameters.json') as json_file:
+
+if os.path.exists('./hyperparameters.json'):
+    hyperparameters_file = './hyperparameters.json'
+else:
+    hyperparameters_file = \
+        settings.WORKDIR + '/input/config/hyperparameters.json'
+
+
+with open(hyperparameters_file) as json_file:
     hyperparameters = json.load(json_file)
 
 DATASET_SIZE_LIMIT = \

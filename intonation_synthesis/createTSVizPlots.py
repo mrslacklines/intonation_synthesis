@@ -697,7 +697,6 @@ if __name__ == "__main__":
                 exit(-1)
 
             data = json.loads(response.content.decode("utf-8"))["data"]
-            import ipdb; ipdb.set_trace()  # breakpoint be876b48 //
             inputFeatureNames = data[inputFeaturesNamesIdx]
             layerNames = data[layerNamesIdx]
             classes = data[classNamesIdx]

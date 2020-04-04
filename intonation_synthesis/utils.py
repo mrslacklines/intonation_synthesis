@@ -55,6 +55,19 @@ def scale(value, old_min, old_max, new_min=0, new_max=1):
     return (((value - old_min) * new_range) / old_range) + new_min
 
 
+def _get_layer_of_nth_path_in_residual_block(res_block, n, layer_name):
+    results = sorted(
+        [
+            (layer, layer.name) for layer in res_block.layers
+            if layer_name in layer.name
+        ],
+        key=lambda x: int(
+            x[0].name[x[0].name.rfind("_") + 1:]
+            if x[0].name[x[0].name.rfind("_") + 1:].isnumeric() else 0))
+
+    print(results[0][1])
+    return results[0][0]
+
 def list_nested_conv_layers(layers_list, skip_suffix=None):
     parsed_layers = []
     for layer in layers_list:
@@ -69,9 +82,16 @@ def list_nested_conv_layers(layers_list, skip_suffix=None):
             parsed_layers.append(layer)
         elif "residual" in layer.name:
             print("Residual Block: {}:".format(layer.name))
-            nested_list = list_nested_conv_layers(
-                layer.layers, skip_suffix=skip_suffix)
-            parsed_layers.extend(nested_list)
+            conv = _get_layer_of_nth_path_in_residual_block(
+                layer, 0, "conv1D")
+            norm = _get_layer_of_nth_path_in_residual_block(
+                layer, 0, "batch_normalization")
+            activation = _get_layer_of_nth_path_in_residual_block(
+                layer, 0, "activation")
+            dropout = _get_layer_of_nth_path_in_residual_block(
+                layer, 0, "spatial_dropout1d")
+            residual_layers_first_path = [conv, norm, activation, dropout]
+            parsed_layers.extend(residual_layers_first_path)
         elif "lambda" in layer.name:
             continue
         else:

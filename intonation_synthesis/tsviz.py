@@ -104,8 +104,8 @@ class VisualizationToolbox:
 
     def initializeTensorflow(self):
         # Create the TensorFlow session
-        config = tf.ConfigProto()
-        config.gpu_options.allow_growth = True
+        config = tf.ConfigProto(device_count = {'GPU': 0})
+        # config.gpu_options.allow_growth = True
         self.sess = tf.Session(config=config)
         set_session(self.sess)
 
@@ -113,11 +113,11 @@ class VisualizationToolbox:
         self.sess.run(tf.global_variables_initializer())
 
     def loadDatasets(self):
-        self.modelPath = "/opt/ml/model/model.hdf5"
+        self.modelPath = "/app/model/model.hdf5"
         self.standardModelPath = self.modelPath
         self.standardModelName = "model"
         num_features = 1297 + 1
-        with open('/opt/ml/model/training_report.txt', 'r') as report_file:
+        with open('/app/model/training_report.txt', 'r') as report_file:
             validation_data = \
                 [line.strip("\n") for line in report_file.readlines()]
 
@@ -133,7 +133,7 @@ class VisualizationToolbox:
             min_f0=const.MIN_F0, max_f0=const.MAX_F0,
             min_duration=const.MIN_DURATION, max_duration=const.MAX_DURATION,
             rich_feats=const.RICH_FEATS)
-        hts_validation_dataset = HTSDataset(
+        self.hts_validation_dataset = HTSDataset(
             settings.WORKDIR + 'input/data/training',
             file_list=validation_data,
             transform=pad_data, f0_backward_window_len=const.F0_WINDOW_LEN,
@@ -145,18 +145,18 @@ class VisualizationToolbox:
         self.valX, self.valY = [], []
         self.inputFeaturesNames = [
             " ".join([exp.pattern for exp in value])
-            for key, value in hts_validation_dataset.binary_dict.items()]
+            for key, value in self.hts_validation_dataset.binary_dict.items()]
 
         for index in range(TRAIN_DATASET_LEN):
             X, y = hts_train_dataset[index]
             self.trainX.append(X.astype("float32"))
             self.trainY.append(y.astype("float32"))
-        for index in range(int(len(hts_validation_dataset)/2)):
-            X, y = hts_validation_dataset[index]
+        for index in range(int(len(self.hts_validation_dataset) / 2)):
+            X, y = self.hts_validation_dataset[index]
             self.testX.append(X.astype("float32"))
             self.testY.append(y.astype("float32"))
-        for index in range(int(len(hts_validation_dataset)/2), len(hts_validation_dataset)):
-            X, y = hts_validation_dataset[index]
+        for index in range(int(len(self.hts_validation_dataset) / 2), len(self.hts_validation_dataset)):
+            X, y = self.hts_validation_dataset[index]
             self.valX.append(X.astype("float32"))
             self.valY.append(y.astype("float32"))
 
@@ -179,22 +179,14 @@ class VisualizationToolbox:
         # Get the input placeholder
         self.inputPlaceholder = self.model.input  # Only single input
         outputLayers = get_tcn_model_layers(self.model)
-        outputLayers = [layer for layer in outputLayers if not ("flatten" in layer.name or "input" in layer.name)]  # Discard the flattening and input layers
-        requiredGradients = [currentLayer.output for currentLayer in outputLayers]
+        requiredGradients = [currentLayer.output[0] if isinstance(currentLayer.output, list) else currentLayer.output for currentLayer in outputLayers]
+        self.outputLayers = outputLayers
+        self.requiredGradients = requiredGradients
         self.outputLayer = requiredGradients[-1]
 
-        if DATASET_TYPE == Dataset.CLASSIFICATION:
-            if len(CLASS_NAMES) == 1:
-                self.labelsPlaceholder = tf.placeholder(tf.float32, shape=[None, 1])
-            else:
-                self.labelsPlaceholder = tf.placeholder(tf.int64, shape=[None, 1])
-            if len(CLASS_NAMES) == 1:  # Influence will die off when sigmoid unit is saturated (multiplication with sigmoid unit in backprop)
-                self.loss = tf.reduce_mean(tf.keras.backend.binary_crossentropy(target=self.labelsPlaceholder, output=requiredGradients[-1]))
-            else:
-                self.loss = tf.reduce_mean(tf.keras.backend.sparse_categorical_crossentropy(target=tf.squeeze(self.labelsPlaceholder, axis=1), output=requiredGradients[-1]))
-        else:
-            self.labelsPlaceholder = tf.placeholder(tf.float32, shape=[None, 1])
-            self.loss = tf.reduce_mean(tf.square(self.labelsPlaceholder - requiredGradients[-1])) # Regression loss
+
+        self.labelsPlaceholder = tf.placeholder(tf.float32, shape=[None, 1])
+        self.loss = tf.reduce_mean(tf.square(self.labelsPlaceholder - requiredGradients[-1])) # Regression loss
 
         self.layerType = []
         self.defaultLayerNames = []
@@ -204,6 +196,9 @@ class VisualizationToolbox:
         self.numLayerFilters = []
         self.slicedTensors = []
         for layerIdx, tensorToBeDifferentiated in enumerate(requiredGradients):
+            if isinstance(tensorToBeDifferentiated, list):
+                residualModelTensor, skipConnectionTensor = tensorToBeDifferentiated
+                tensorToBeDifferentiated = residualModelTensor
             layerShape = tensorToBeDifferentiated.shape
             layerName = getShortName(outputLayers[layerIdx].name, outputLayers[layerIdx].__class__.__name__)
             self.defaultLayerNames.append(layerName)
@@ -233,23 +228,6 @@ class VisualizationToolbox:
         self.scaleGradientWrtLossValues = True
 
 
-    def prevInputButton(self):
-        if self.inputIterator > 0:
-            self.inputIterator -= 1
-            return True
-        else:
-            return False
-
-
-    def nextInputButton(self):
-        if (self.setType == Dataset.TEST.value and (self.inputIterator < self.testX.shape[0] - 1)) or \
-                (self.setType == Dataset.TRAIN.value and (self.inputIterator < self.trainX.shape[0] - 1)):
-            self.inputIterator += 1
-            return True
-        else:
-            return False
-
-
     def resetIterator(self):
         self.inputIterator = 0
         return True
@@ -268,21 +246,11 @@ class VisualizationToolbox:
         return self.inputIterator
 
 
-    def changePercentile(self, percentile):
-        self.currentPercentileValue = percentile / 100.0
-
-
     def getModelLayerNames(self):
         if "input" not in self.layerNames[0]:
             return self.defaultLayerNames
         else:
             return self.defaultLayerNames[1:]
-
-
-    def classifySequence(self, seq):
-        with K.get_session().graph.as_default():
-            prediction = self.model.predict(np.expand_dims(seq, axis=0))
-        return prediction[0]
 
 
     def getExample(self):
@@ -356,32 +324,32 @@ class VisualizationToolbox:
         serviceOutput.create_dataset('layerNames', data=model_layer_names)
 
         # Add inverse optimization and adversarial examples output here
-        startingSeries, startingSeriesForecast, startSerSaliencyMap, invOptimizedSeries, invOptimizedForecast, invOptSaliencyMap, advExampleOrig, forecastValueAdvOrig, advExSaliencyMap = self.performInverseOptimizationAndAdvAttack()
+        # startingSeries, startingSeriesForecast, startSerSaliencyMap, invOptimizedSeries, invOptimizedForecast, invOptSaliencyMap, advExampleOrig, forecastValueAdvOrig, advExSaliencyMap = self.performInverseOptimizationAndAdvAttack()
 
-        serviceOutput.create_dataset(
-            'inverseOptimization/startingSeries', data=startingSeries)
+        # serviceOutput.create_dataset(
+        #     'inverseOptimization/startingSeries', data=startingSeries)
 
-        serviceOutput.create_dataset(
-            'inverseOptimization/startingSeriesForecast',
-            data=startingSeriesForecast)
+        # serviceOutput.create_dataset(
+        #     'inverseOptimization/startingSeriesForecast',
+        #     data=startingSeriesForecast)
 
-        serviceOutput.create_dataset(
-            'inverseOptimization/startSerSaliencyMap',
-            data=startSerSaliencyMap)
+        # serviceOutput.create_dataset(
+        #     'inverseOptimization/startSerSaliencyMap',
+        #     data=startSerSaliencyMap)
 
-        serviceOutput.create_dataset(
-            'inverseOptimization/invOptimizedSeries', data=invOptimizedSeries)
+        # serviceOutput.create_dataset(
+        #     'inverseOptimization/invOptimizedSeries', data=invOptimizedSeries)
 
-        serviceOutput.create_dataset(
-            'inverseOptimization/invOptimizedForecast',
-            data=invOptimizedForecast)
+        # serviceOutput.create_dataset(
+        #     'inverseOptimization/invOptimizedForecast',
+        #     data=invOptimizedForecast)
 
-        serviceOutput.create_dataset(
-            'inverseOptimization/invOptSaliencyMap',
-            data=invOptSaliencyMap)
+        # serviceOutput.create_dataset(
+        #     'inverseOptimization/invOptSaliencyMap',
+        #     data=invOptSaliencyMap)
 
-        serviceOutput.create_dataset(
-            'adversarialExamples', data="Not computed")
+        # serviceOutput.create_dataset(
+        #     'adversarialExamples', data="Not computed")
 
         # Add the raw input and the label
         serviceOutput.create_dataset('inputLayer', data=currentInput.T)
@@ -518,8 +486,6 @@ class VisualizationToolbox:
 
         # Remove redundant input-layer if pruned model is currently loaded
         if "input" in self.layerNames[0]:
-            import ipdb; ipdb.set_trace()  # breakpoint 4b81f29c //
-            pass
             del serviceOutput['data/0']
 
         if fastMode != Modes.MINIMAL.value:

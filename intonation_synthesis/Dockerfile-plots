@@ -76,6 +76,9 @@ ADD config_tsviz.py ./config_tsviz.py
 ADD visualizationService.py .
 ADD createTSVizPlots.py .
 
+# Extracts automatically
+ADD model.tar.gz ./model
+
 ADD requirements.txt .
 RUN pip3 install --upgrade pip
 RUN pip3 install -r requirements.txt
@@ -86,4 +89,4 @@ ADD train.sh /app/entrypoints/train
 RUN chmod +x /app/entrypoints/train
 ENV PATH=/app/entrypoints:${PATH}
 
-ENTRYPOINT ["python3","create_plots"]
+ENTRYPOINT ["python3","create_plots.py"]

@@ -79,6 +79,9 @@ ADD hyperparameters.json /opt/ml/input/config
 
 ADD create_plots.py .
 
+RUN mkdir model
+ADD model.tar.gz ./model
+
 ADD utils_tsviz.py ./utils_tsviz.py
 ADD tsviz.py .
 ADD config_tsviz.py ./config_tsviz.py
