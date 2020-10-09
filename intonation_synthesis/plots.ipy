@@ -1,0 +1,60 @@
+# coding: utf-8
+import re
+
+import h5py
+from matplotlib import colors
+from matplotlib import pyplot as plt
+
+import const
+from datasets import HTSDataset
+from train import pad_data
+
+with open('model/training_report.txt', 'r') as report_file:
+    validation_data = \
+        [line.strip("\n") for line in report_file.readlines()]
+
+hts_validation_dataset = HTSDataset(
+    "/media/tomaszk/DANE/Speech_archive/HTS-demo_AMU_PL_ILO_STRAIGHT",
+    file_list=validation_data,
+    transform=pad_data, f0_backward_window_len=const.F0_WINDOW_LEN,
+    min_f0=const.MIN_F0, max_f0=const.MAX_F0,
+    min_duration=const.MIN_DURATION, max_duration=const.MAX_DURATION,
+    rich_feats=const.RICH_FEATS)
+
+results = h5py.File('./results/preds.hdf5', 'r')
+results.keys()
+filename = 'amu_pl_ilo_BAZA_2006A_zbitki_A0135.lab'
+results[filename + '/saliency']
+
+saliency = results[filename + '/saliency'][0][0].T
+saliency
+
+QUESTION_FILE_PATH = hts_validation_dataset.question_file_name
+with open(QUESTION_FILE_PATH) as qst_file:
+    questions = qst_file.readlines()
+inputFeatureNames = [
+    re.sub("[\t\n]", "", re.sub('\"(.*)\"', "\g<1>", line))
+    for line in questions if line.strip()
+]
+inputFeatureNames.append('vuv')
+feature_saliency_ranking = sorted(
+    [(saliency[index].mean(), index) for index in range(saliency.shape[0])],
+    key=lambda x: x[0], reverse=True)
+[(inputFeatureNames[feat[1]], feat[0]) for feat in feature_saliency_ranking]
+
+fig, ax = plt.subplots(2, 1)
+pcm = ax[0].pcolormesh(
+    saliency, norm=colors.SymLogNorm(
+        linthresh=0.001, linscale=0.001,
+        vmin=saliency.min(), vmax=saliency.max()),
+    cmap='RdBu_r')
+plt.xlim([0, saliency.shape[0]])
+ax[1].plot(results[filename + '/preds'][0])
+results[filename + '/preds'][0]
+results[filename + '/preds'][0].shape
+results[filename + '/preds'][0].shape[0]
+plt.xlim([0, results[filename + '/preds'][0].shape[0]])
+# fig.colorbar(pcm, ax=ax[0])
+plt.savefig(
+    filename[:filename.index('.') - 1] + '.png', dpi=600)
+%save -r plots 1-2
