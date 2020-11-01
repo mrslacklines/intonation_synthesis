@@ -126,14 +126,14 @@ class HTSDataset(tf.keras.utils.Sequence):
             self, cmp_filename, add_ti=False, use_window=False):
         htk_reader = htk_io.HTK_Parm_IO()
         htk_reader.read_htk(self.workdir + '/data/cmp/' + cmp_filename)
-        target = htk_reader.data[:, self.target_feature_order].copy()
-        target = numpy.nan_to_num(target, copy=True)
+        f0 = htk_reader.data[:, self.target_feature_order].copy()
+        f0 = numpy.nan_to_num(f0, copy=True)
         # mark unvoiced regions with 0 instead of -inf
-        numpy.place(target, target < 0, [None, ])
+        numpy.place(f0, f0 < 0, [None, ])
         acoustic_features = numpy.delete(
             htk_reader.data, self.target_features_list, 1)
 
-        return acoustic_features, target
+        return acoustic_features, f0
 
     def load_duration_data(self, label, frame_shift_in_micro_sec=50000):
 
@@ -263,27 +263,27 @@ class HTSDataset(tf.keras.utils.Sequence):
         basename, ext = os.path.splitext(filename)
         fullcontext_label = self.load_hts_label(filename)
         linguistic_features = self.load_linguistic_features(fullcontext_label)
-        acoustic_features, target = self.load_hts_acoustic_data(
+        acoustic_features, f0 = self.load_hts_acoustic_data(
             basename + '.cmp')
 
-        if target.shape[0] == (linguistic_features.shape[0] + 1):
-            target = target[:-1]
-        vuv = self.make_vuv(target)
-        target = target.reshape(-1, 1)
+        if f0.shape[0] == (linguistic_features.shape[0] + 1):
+            f0 = f0[:-1]
+        vuv = self.make_vuv(f0)
+        f0 = f0.reshape(-1, 1)
 
         assert(
-            target.shape[0] ==
+            f0.shape[0] ==
             linguistic_features.shape[0] ==
             vuv.shape[0])
         feats = numpy.hstack(
             [linguistic_features, vuv])
 
         if self._transform is not None:
-            feats, target = self._transform(feats, target)
+            feats, f0 = self._transform(feats, f0)
 
         return \
             numpy.nan_to_num(feats).astype(numpy.bool), \
-            numpy.nan_to_num(target).astype(numpy.float32)
+            numpy.nan_to_num(f0).astype(numpy.float32)
 
     def __getitem__(self, idx):
 

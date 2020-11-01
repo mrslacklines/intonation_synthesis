@@ -107,3 +107,29 @@ def get_tcn_model_layers(model):
     outputLayers = list_nested_conv_layers(tcn_layer._layers)
     outputLayers.extend(model.layers[1:])
     return outputLayers
+
+
+def _convert_and_save_preds_to_file(preds, filepath):
+    with open(filepath, "w") as pred_f0_fh:
+        t = 0.0
+        for line in preds:
+            t += 0.005
+            f0_val = np.exp(line) if np.exp(line) != 1.0 else 0
+            pred_f0_fh.write("{} {}\n".format(t, f0_val))
+
+
+def predict(data, save=True, dir='./results/test_predictions/'):
+    preds_list = []
+    if save:
+        if not os.path.exists(dir):
+            os.makedirs(dir)
+    for index in range(len(data)):
+        X, y = data[index]
+        preds = model.predict(X).flatten()
+        preds_list.append(preds)
+        if save:
+            filename = data.data[index].split(".")[0] + ".f0"
+            filepath = os.path.join(dir, filepath)
+            save_preds_to_file(preds, filepaths)
+
+    return preds_list
