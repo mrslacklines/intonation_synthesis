@@ -1,4 +1,3 @@
-import mxnet as mx
 import numpy
 import os
 import pandas
@@ -9,22 +8,24 @@ from merlin.io_funcs import htk_io
 from merlin.io_funcs.binary_io import BinaryIOCollection
 from nnmnkwii.frontend import merlin as fe
 from nnmnkwii.io import hts
-from sklearn.preprocessing import MinMaxScaler
 
+import const
 from utils import scale
 
 
-class HTSDataset(mx.gluon.data.Dataset):
+class HTSDataset(tf.keras.utils.Sequence):
     """
     A dataset for loading HTS data from disk.
     """
 
     def __init__(
-            self, hts_dataset_path, file_list=None, transform=None,
+            self, hts_dataset_path, batch_size=1, file_list=None, transform=None,
             max_size=None, split_ratio=0.8, randomize=True,
             f0_backward_window_len=50, min_f0=None, max_f0=None,
             min_duration=None, max_duration=None, rich_feats=False):
 
+        self.batch_size = batch_size
+        self.step = self.batch_size if self.batch_size > 1 else 1
         self.max_size = max_size
         self.split_ratio = split_ratio
         self.randomize = randomize
@@ -54,6 +55,8 @@ class HTSDataset(mx.gluon.data.Dataset):
         self.SYL_POS_IN_PHR = re.compile('\-(\d)\#')
 
         self.rich_feats = rich_feats
+
+        self.current_index = 0
 
     def list_files(self):
         if self.file_list is not None:
@@ -94,7 +97,7 @@ class HTSDataset(mx.gluon.data.Dataset):
             subphone_features=subphone_features,
             add_frame_features=add_frame_features)
 
-        return features
+        return features.astype(numpy.bool)
 
     def add_f0_window(self, f0):
         df = pandas.DataFrame(f0, columns=['f0', ])
@@ -109,7 +112,9 @@ class HTSDataset(mx.gluon.data.Dataset):
         return df.values
 
     def make_vuv(self, f0):
-        return numpy.array([[el, ] for el in numpy.isfinite(f0).astype(int)])
+        return numpy.array(
+            [[el, ] for el in numpy.isfinite(f0).astype(int)]).astype(
+            numpy.bool)
 
     def load_lf0(self, filename):
         binary_reader = BinaryIOCollection()
@@ -121,14 +126,14 @@ class HTSDataset(mx.gluon.data.Dataset):
             self, cmp_filename, add_ti=False, use_window=False):
         htk_reader = htk_io.HTK_Parm_IO()
         htk_reader.read_htk(self.workdir + '/data/cmp/' + cmp_filename)
-        target = htk_reader.data[:, self.target_feature_order].copy()
-        target = numpy.nan_to_num(target, copy=True)
+        f0 = htk_reader.data[:, self.target_feature_order].copy()
+        f0 = numpy.nan_to_num(f0, copy=True)
         # mark unvoiced regions with 0 instead of -inf
-        numpy.place(target, target < 0, [None, ])
+        numpy.place(f0, f0 < 0, [None, ])
         acoustic_features = numpy.delete(
             htk_reader.data, self.target_features_list, 1)
 
-        return acoustic_features, target
+        return acoustic_features, f0
 
     def load_duration_data(self, label, frame_shift_in_micro_sec=50000):
 
@@ -234,12 +239,6 @@ class HTSDataset(mx.gluon.data.Dataset):
 
         return df.values
 
-    def preprocess_features(self, features, normalize=False):
-        features = MinMaxScaler(feature_range=(0, 1)).fit_transform(
-            features)
-
-        return features
-
     def add_ti_features(self, f0):
         df = pandas.DataFrame(f0, columns=['f0_' + str(n) for n in range(
             self.f0_backward_window_len)])
@@ -257,65 +256,50 @@ class HTSDataset(mx.gluon.data.Dataset):
         df = make_technical_indicators(df)
         return df
 
-    def __getitem__(self, idx):
+    def make_data_for_index(self, idx):
         filename = self.data[idx]
         # DEBUG:
         # print("Processing {}..".format(filename))
         basename, ext = os.path.splitext(filename)
         fullcontext_label = self.load_hts_label(filename)
         linguistic_features = self.load_linguistic_features(fullcontext_label)
-        acoustic_features, target = self.load_hts_acoustic_data(
+        acoustic_features, f0 = self.load_hts_acoustic_data(
             basename + '.cmp')
 
+        if f0.shape[0] == (linguistic_features.shape[0] + 1):
+            f0 = f0[:-1]
+        vuv = self.make_vuv(f0)
+        f0 = f0.reshape(-1, 1)
 
-        if target.shape[0] == (linguistic_features.shape[0] + 1):
-            target = target[:-1]
-        vuv = self.make_vuv(target)
-        target = target.reshape(-1, 1)
-
-        if self.rich_feats:
-            acoustic_features = self.preprocess_features(
-                acoustic_features)
-            target_df = pandas.DataFrame(target)
-            target = target_df.apply(
-                scale, old_min=self.min_f0, old_max=self.max_f0, new_min=0,
-                new_max=1).fillna(0).values
-            target = self.preprocess_features(
-                numpy.nan_to_num(target), normalize=False)
-            duration_features = self.load_duration_data(filename)
-            # add target scaling ?
-            # add interpolated f0 window
-            # target = self.preprocess_features(target)
-            f0_window_features = self.add_f0_window(target).astype('float64')
-            f0_technical_indicators = self.add_ti_features(f0_window_features)
-            f0_technical_indicators = self.preprocess_features(
-                f0_technical_indicators.astype('float64'))
-            assert(
-                acoustic_features.shape[0] == duration_features.shape[0] ==
-                linguistic_features.shape[0] == vuv.shape[0] ==
-                f0_window_features.shape[0] ==
-                f0_technical_indicators.shape[0])
-            feats = numpy.hstack(
-                [acoustic_features, linguistic_features, vuv,
-                 duration_features, f0_window_features,
-                 f0_technical_indicators])
-        # READD ACOUSTIC FEATS
-        else:
-            assert(
-                target.shape[0] ==
-                linguistic_features.shape[0] ==
-                vuv.shape[0])
-            feats = numpy.hstack(
-                [linguistic_features, vuv])
+        assert(
+            f0.shape[0] ==
+            linguistic_features.shape[0] ==
+            vuv.shape[0])
+        feats = numpy.hstack(
+            [linguistic_features, vuv])
 
         if self._transform is not None:
-            feats, target = self._transform(feats, target)
+            feats, f0 = self._transform(feats, f0)
 
-        feats, target = \
-            numpy.nan_to_num(feats), \
-            numpy.nan_to_num(target)
+        return \
+            numpy.nan_to_num(feats).astype(numpy.bool), \
+            numpy.nan_to_num(f0).astype(numpy.float32)
 
-        return feats.astype('float64'), target
+    def __getitem__(self, idx):
+
+        X_list = []
+        y_list = []
+
+        for item in range(self.batch_size):
+            file_idx = (idx * self.batch_size) + item
+            X, y = self.make_data_for_index(file_idx)
+            X_list.append(X)
+            y_list.append(y)
+
+        self.current_index += self.step
+
+        return numpy.stack(X_list), numpy.stack(y_list)
 
     def __len__(self):
-        return len(self.data)
+        return len(self.data) \
+            if self.batch_size <= 0 else int(len(self.data) / self.batch_size)

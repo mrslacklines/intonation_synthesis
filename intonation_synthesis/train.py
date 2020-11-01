@@ -5,7 +5,6 @@ import os
 import tensorflow as tf
 from matplotlib import pyplot as plt
 from multiprocessing import cpu_count
-from mxnet import gluon
 
 import const
 import settings
@@ -14,11 +13,17 @@ from net import build_net
 from utils import hprint, pad_array
 
 
-tf.compat.v1.disable_eager_execution()
+# tf.compat.v1.disable_eager_execution()
 
 
-with open(
-        settings.WORKDIR + '/input/config/hyperparameters.json') as json_file:
+if os.path.exists('./hyperparameters.json'):
+    hyperparameters_file = './hyperparameters.json'
+else:
+    hyperparameters_file = os.path.join(
+        settings.WORKDIR, 'input/config', 'hyperparameters.json')
+
+
+with open(hyperparameters_file) as json_file:
     hyperparameters = json.load(json_file)
 
 DATASET_SIZE_LIMIT = \
@@ -30,24 +35,16 @@ EPOCHS = int(hyperparameters.get('epochs'))
 HIDDEN_SIZE = int(hyperparameters.get('hidden_size'))
 NUM_LAYERS = int(hyperparameters.get('num_layers'))
 DROPOUT = float(hyperparameters.get('dropout'))
-# Currently not used (ADAM)
-# LEARNING_RATE = float(hyperparameters.get('learning_rate'))
 
 CPU_COUNT = \
     int(hyperparameters.get('cpu_count')) \
     if hyperparameters.get('cpu_count') is not None \
     else round(cpu_count() / 2)
 
-
-def update_loss_plot(loss):
-    f = plt.figure()
-    plt.plot(loss, 'b-')
-    f.savefig(
-        settings.WORKDIR +
-        "model/loss_{}.pdf".format(
-            datetime.datetime.now().strftime("%B_%d_%Y_%I%M%p")),
-        bbox_inches='tight')
-    plt.close('all')
+GPU_COUNT = \
+    int(hyperparameters.get('gpu_count')) \
+    if hyperparameters.get('gpu_count') is not None \
+    else 1
 
 
 def pad_data(features, target, max_seq_len=const.MAX_LEN):
@@ -59,49 +56,23 @@ def pad_data(features, target, max_seq_len=const.MAX_LEN):
     return features_padded, target_padded
 
 
-def save(
-        net, epoch, loss, holdout_data=None, timestamp_files=False,
-        model_dir="/model/"):
-    if timestamp_files:
-        model_filename = settings.WORKDIR + model_dir + "{}.model".format(
-            datetime.datetime.now().strftime("%B_%d_%Y_%I%M%p"))
-    else:
-        model_filename = settings.WORKDIR + model_dir + "model.model"
-    with open(
-            settings.WORKDIR + model_dir + "training_report.txt", "a+"
-    ) as report_file:
-        json.dump(
-            {
-                'epoch': epoch,
-                'loss': str(loss),
-                'holdout_data': holdout_data,
-            }, report_file)
-
-        tf.saved_model.save(net, model_filename)
-
-
 def test(net=None, test_files=None):
     hprint("Testing...")
 
     hts_testset = HTSDataset(
         settings.WORKDIR + 'input/data/training', file_list=test_files,
         transform=pad_data, f0_backward_window_len=const.F0_WINDOW_LEN,
-        min_f0=const.MIN_F0, max_f0=const.MAX_F0,
+        min_f0=const.MIN_F0, max_f0=const.MAX_F0, batch_size=BATCH_SIZE,
         min_duration=const.MIN_DURATION, max_duration=const.MAX_DURATION,
         rich_feats=const.RICH_FEATS)
 
-    test_data = gluon.data.DataLoader(
-        hts_testset, batch_size=BATCH_SIZE, last_batch='discard',
-        num_workers=CPU_COUNT, timeout=5000)
-
-    for X_batch, y_batch in test_data:
-        predictions = net.predict(X_batch.asnumpy(), batch_size=BATCH_SIZE)
+    for X_batch, y_batch in hts_testset:
+        predictions = net.predict(X_batch, batch_size=BATCH_SIZE)
         for sample_no in range(len(X_batch)):
             f = plt.figure()
             plt.plot(
                 predictions[sample_no, :].tolist(), 'r-',
-                y_batch[sample_no, :].astype(
-                    'float32').asnumpy().tolist(), 'b-')
+                y_batch[sample_no, :].tolist(), 'b-')
             f.savefig(
                 settings.WORKDIR +
                 "model/pred_vs_real_sample_{}_{}.pdf".format(
@@ -109,25 +80,22 @@ def test(net=None, test_files=None):
                     datetime.datetime.now().strftime("%B_%d_%Y_%I%M%p")),
                 bbox_inches='tight')
             plt.close('all')
+    with open(settings.WORKDIR + "model/training_report.txt", "w") as report:
+        report.writelines("\n".join(test_files))
 
 
 def train():
 
-    if not os.path.exists('plots'):
-        os.makedirs('plots')
-    if not os.path.exists('models'):
-        os.makedirs('models')
-
     hts_dataset = HTSDataset(
         settings.WORKDIR + 'input/data/training', transform=pad_data,
-        max_size=DATASET_SIZE_LIMIT,
+        max_size=DATASET_SIZE_LIMIT, batch_size=BATCH_SIZE,
         f0_backward_window_len=const.F0_WINDOW_LEN, min_f0=const.MIN_F0,
         max_f0=const.MAX_F0, min_duration=const.MIN_DURATION,
         max_duration=const.MAX_DURATION, rich_feats=const.RICH_FEATS)
 
     hts_validation_dataset = HTSDataset(
         settings.WORKDIR + 'input/data/training',
-        file_list=hts_dataset.validation_data,
+        file_list=hts_dataset.validation_data, batch_size=BATCH_SIZE,
         transform=pad_data, f0_backward_window_len=const.F0_WINDOW_LEN,
         min_f0=const.MIN_F0, max_f0=const.MAX_F0,
         min_duration=const.MIN_DURATION, max_duration=const.MAX_DURATION,
@@ -135,33 +103,28 @@ def train():
 
     hprint('Dataset size: {}'.format(str(len(hts_dataset))))
 
-    train_data = gluon.data.DataLoader(
-        hts_dataset, batch_size=BATCH_SIZE,
-        num_workers=CPU_COUNT, last_batch='discard', timeout=5000)
+    model = build_net(HIDDEN_SIZE, NUM_LAYERS, DROPOUT, gpus=GPU_COUNT)
 
-    model = build_net(HIDDEN_SIZE, NUM_LAYERS, DROPOUT)
+    checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
+        settings.WORKDIR + "model/model.hdf5", monitor='val_loss',
+        verbose=1, save_best_only=True, mode='auto')
+    early_stopping_callback = tf.keras.callbacks.EarlyStopping(
+        monitor='val_loss', min_delta=0.001, patience=50, verbose=1,
+        mode='auto', restore_best_weights=True)
 
-    loss_history = []
+    if CPU_COUNT > 0:
+        loss_history = model.fit_generator(
+            hts_dataset, validation_data=hts_validation_dataset, epochs=EPOCHS,
+            callbacks=[checkpoint_callback, early_stopping_callback],
+            workers=CPU_COUNT, use_multiprocessing=False,
+            verbose=2)
+    else:
+        loss_history = model.fit_generator(
+            hts_dataset, validation_data=hts_validation_dataset, epochs=EPOCHS,
+            callbacks=[checkpoint_callback, early_stopping_callback],
+            verbose=2)
 
-    for e in range(EPOCHS):
-        hprint("EPOCH: {}".format(e))
-        for batch_no, (X_batch, y_batch) in enumerate(train_data):
-            hprint("BATCH: {}, EPOCH PROGRESS: {}".format(
-                batch_no + 1, (batch_no + 1) * BATCH_SIZE / (len(
-                    hts_dataset)) * 100 + "%"))
-            loss = model.train_on_batch(
-                X_batch.asnumpy(), y_batch.asnumpy())
-            print("LOSS: {}".format(loss))
-            loss_history.append(loss)
-
-        if (e % 10 == 0):
-            save(
-                model, epoch=e, loss=loss,
-                holdout_data=hts_dataset._holdout_data)
-
-            update_loss_plot(loss_history)
-
-    model.trainable = False
+    # model.trainable = False
     test(model, hts_dataset.test_data)
 
     return model
