@@ -77,8 +77,30 @@ This part still needs documenting. For the time being please inspect the `create
 The results are also available under `results/` in this repository. Below you can find some examples of what kind of data can be generated with the current code.
 
 # Results
+
+## Individual results
 The generated results include invidual analyses for each of the testset recordings. Each analysis comprises of a Layer-wise Relevance Propagation result heatmap aligned with the actual fundamental frequency plotted against the predicted values. The title of each plot is an ortographic transcription of the utterance, i.e.:
 ![amu_pl_ilo_BAZA_2006A_zbitki_A0119](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/individual/amu_pl_ilo_BAZA_2006A_zbitki_A0119.png)
 
 Additionally, the predicted F0 is plotted without log-normalization.
 ![amu_pl_ilo_BAZA_2006A_zbitki_A0119_simple_pred_freq](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/individual/amu_pl_ilo_BAZA_2006A_zbitki_A0119_simple_pred_freq.png)
+
+## General results
+Additionally, the script calculates different kinds of summed and mean relevancy arrays for all of the 191 speech samples in the testset.
+* Sum
+![sum](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/sum.png)
+* Absolute sum
+![abs sum](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/absolute_sum.png)
+* Positive values-only sum
+![pos sum](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/positive_values_sum.png)
+* Negative values-only sum
+![neg sum](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/negative_values_sum.png)
+* Mean
+![mean](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/mean_(sum).png)
+* Mean of absolute sum
+![mean abs sum](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/mean_(absolute_sum).png)
+* Mean of positive values-only sum
+![mean pos sum](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/mean_(positive_only_sum).png)
+* Mean of negative values-only sum
+![mean neg sum](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/mean_(negative_only_sum).png)
+
