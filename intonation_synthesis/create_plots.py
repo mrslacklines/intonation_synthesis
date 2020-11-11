@@ -169,6 +169,7 @@ def _plot_group_results_df(df, title):
     plt.savefig(os.path.join(RESULTS_PATH, filename), bbox_inches='tight', pad_inches=0.5, dpi=600)
     plt.close('all')
 
+
 def plot_group_results(df, title=None):
     _plot_group_results_df(df, title)
     if df.iloc[0]['group name'] == 'VUV':
@@ -205,6 +206,23 @@ def setup_analyzer(model):
     return innvestigate.create_analyzer('lrp.z', model, allow_lambda_layers=True, neuron_selection_mode="all")
 
 
+def adjust_predicted_f0_for_nsf_synth(pred_f0, real_f0):
+    """
+    This function adjusts the predicted F0 to align with the voiced/unvoiced regions
+    as returned by the NSF F0 extraction algorithm. We simply cut predicted values where the reference F0 is 0
+    and copy the last predicted F0 value for regions where we predicted 0 but the reference F0 has values > 0.
+    This should let us get rid of the glitches at voice/unvoiced region boundaries.
+    """
+    df = pd.DataFrame(pred_f0, columns=['preds',])
+    preds_interp = df.replace({0:np.nan}
+                              ).interpolate(method='quadratic'
+                                            ).replace(method='ffill'
+                                                      ).replace(method='bfill'
+                                                                ).values.flatten()
+
+    return np.where(real_f0 > 0, preds_interp, 0)
+
+
 def read_bin_file(filename, dir=REFERENCE_F0_DIR_PATH, dataformat='<f4'):
     fh = open(os.path.join(dir, filename))
     datatype = np.dtype('<f4')
@@ -229,6 +247,17 @@ def calculate_errors(preds, y):
     }
 
 
+def plot_predictions_freq(preds_freq, data, title, filename):
+    fig = plt.figure()
+    plt.plot(preds_freq)
+    plt.plot(data)
+    plt.xlabel('Sample number (time)')
+    plt.ylabel('Frequency [Hz]')
+    plt.legend(['Predicted F0 (quadratic interpolation)', 'Ground truth'], loc='lower left')
+    plt.suptitle(title)
+    plt.savefig(filename, bbox_inches='tight', pad_inches=0.5, dpi=600)
+
+
 def perform_analysis():
     hts_validation_dataset = setup_data()
     model = setup_model()
@@ -243,10 +272,16 @@ def perform_analysis():
     file_errors = []
 
     for index, (X, y) in enumerate(hts_validation_dataset):
-        filename = hts_validation_dataset.data[index].split(".")[0] + ".f0"
-        print("Analysing {}...".format(filename))
+        basename = hts_validation_dataset.data[index].split(".")[0]
+        filename = basename + ".f0"
+        print("Analysing {}...".format(basename))
         analysis = analyzer.analyze(X)
         preds = model.predict(X).flatten()
+
+        txt_label_filename = hts_validation_dataset.data[index].split('.')[0].split('_')[-1] + '.txt'
+        txt_label_path = os.path.join(DATASET_PATH, txt_label_filename)
+        with open(txt_label_path, 'r', encoding='cp1250') as txt_label_fh:
+            txt_label = u'"{}"'.format(" ".join(txt_label_fh.readlines()).strip())
 
         print("Calculating prediction errors...")
         current_errors = calculate_errors(preds, y.flatten())
@@ -261,16 +296,14 @@ def perform_analysis():
         preds = preds[:data.shape[0]]
         # Get F0 from Log(F0)
         preds_freq = np.array([np.exp(val) if val != 0 else val for val in preds])
+        preds_freq = adjust_predicted_f0_for_nsf_synth(preds_freq, data)
+
+        plot_predictions_freq(preds_freq, data, txt_label, os.path.join(RESULTS_PATH, basename + '_simple_pred_freq.png'))
 
         filepath = os.path.join(RESULTS_PATH, filename)
         print("Saving prediction results {}...".format(filepath))
+
         save_preds_to_bin_file(preds_freq, filepath)
-
-        txt_label_filename = hts_validation_dataset.data[index].split('.')[0].split('_')[-1] + '.txt'
-        txt_label_path = os.path.join(DATASET_PATH, txt_label_filename)
-        with open(txt_label_path, 'r', encoding='cp1250') as txt_label_fh:
-            txt_label = u'"{}"'.format(" ".join(txt_label_fh.readlines()).strip())
-
 
         print("Plotting analysis results...")
         make_plots(
@@ -417,7 +450,7 @@ def make_results(return_results=False):
             else:
                 ascending = False
             df = pd.DataFrame(results_dict[detail_level]).sort_values(['group mean'], ascending=ascending)
-            dataframe_title = "Feature relevancy ranking - {} ({})".format(key, detail_level)
+            dataframe_title = "Feature relevance ranking - {} - {}".format(key, detail_level)
             filename = "_".join(dataframe_title.lower().split()) + '.csv'
             plot_group_results(df, title=dataframe_title)
             df = df.set_index('group name')
