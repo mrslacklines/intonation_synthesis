@@ -1,7 +1,7 @@
-# Neural F0 model for synthetic Polish read speech
-This projects aims at training a deep neural network for modelling Polish read speech F0.
+# Explainable Deep Neural F0 Model of Polish Read Speech
+This projects aims at training a deep neural network for modelling Polish read speech F0 and exploring the relevancy of input linguistic features on the predicted F0 contours.
 Currently we are using AWS SageMaker as the cloud service for running both the training and
-inference. 
+inference. The generation of feature relevance and plotting can be run both in cloud and locally.
 
 ## Build containers
 Build and push a docker container to the Amazon Web Services ECR repository
@@ -46,13 +46,13 @@ estimator = sage.estimator.Estimator(
     output_path="s3://{}/output".format(sess.default_bucket()),
     sagemaker_session=sess,
     hyperparameters={
-        "epochs": 2,
+        "epochs": 200,
         "learning_rate": 0.1,
         "num_layers": 2,
-        "hidden_size": 1297,
+        "hidden_size": 64,
         "dropout": 0.2,
-        "batch_size": 4,
-        "dataset_size_limit": False,
+        "batch_size": 8,
+        "dataset_size_limit": false,
         "cpu_count": 0
     },
     metric_definitions=[
@@ -70,3 +70,8 @@ estimator.fit({'training': 's3://intonation-dev/'}, wait=True)
 ```
 
 You might need to adjust the variables to suit your needs.
+
+
+## Generating feature relevancy reports and plots
+This part still needs documenting. For the time being please inspect the `create_plots.py` and `Dockerfile-plots` files. These are run in the same manner as the training part. This part generates rich results including LRP.Z analysis plots for individual files, different types of mean LRP plots for the whole dataset and a number of CSV files with feature relevance rankings and prediction MSE calculations. I promise I will document those when I finish writing the paper :).
+The results are also available under `results/` in this repository. Here are some examples:
