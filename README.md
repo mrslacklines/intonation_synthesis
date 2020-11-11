@@ -1,4 +1,5 @@
 # Explainable Deep Neural F0 Model of Polish Read Speech
+## Tomasz Kuczmarski
 This projects aims at training a deep neural network for modelling Polish read speech F0 and exploring the relevance of input linguistic features on the predicted F0 contours.
 Currently we are using AWS SageMaker as the cloud service for running both the training and
 inference. The generation of feature relevance and plotting can be run both in cloud and locally.
