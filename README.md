@@ -78,4 +78,7 @@ The results are also available under `results/` in this repository. Below you ca
 
 # Results
 The generated results include invidual analyses for each of the testset recordings. Each analysis comprises of a Layer-wise Relevance Propagation result heatmap aligned with the actual fundamental frequency plotted against the predicted values. The title of each plot is an ortographic transcription of the utterance, i.e.:
-[invidual_result](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/individual/amu_pl_ilo_BAZA_2006A_zbitki_A0119_simple_pred_freq.png)
+![amu_pl_ilo_BAZA_2006A_zbitki_A0119](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/individual/amu_pl_ilo_BAZA_2006A_zbitki_A0119.png)
+
+Additionally, the predicted F0 is plotted without log-normalization.
+![amu_pl_ilo_BAZA_2006A_zbitki_A0119_simple_pred_freq](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/individual/amu_pl_ilo_BAZA_2006A_zbitki_A0119_simple_pred_freq.png)
