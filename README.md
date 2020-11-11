@@ -1,5 +1,5 @@
 # Explainable Deep Neural F0 Model of Polish Read Speech
-This projects aims at training a deep neural network for modelling Polish read speech F0 and exploring the relevancy of input linguistic features on the predicted F0 contours.
+This projects aims at training a deep neural network for modelling Polish read speech F0 and exploring the relevance of input linguistic features on the predicted F0 contours.
 Currently we are using AWS SageMaker as the cloud service for running both the training and
 inference. The generation of feature relevance and plotting can be run both in cloud and locally.
 
@@ -72,7 +72,7 @@ estimator.fit({'training': 's3://intonation-dev/'}, wait=True)
 You might need to adjust the variables to suit your needs.
 
 
-## Generating feature relevancy reports and plots
+## Generating feature relevance reports and plots
 This part still needs documenting. For the time being please inspect the `create_plots.py` and `Dockerfile-plots` files. These are run in the same manner as the training part. This part generates rich results including LRP.Z analysis plots for individual files, different types of mean LRP plots for the whole dataset and a number of CSV files with feature relevance rankings and prediction MSE calculations. I promise I will document those when I finish writing the paper :).
 The results are also available under `results/` in this repository. Below you can find some examples of what kind of data can be generated with the current code.
 
@@ -86,7 +86,7 @@ Additionally, the predicted F0 is plotted without log-normalization.
 ![amu_pl_ilo_BAZA_2006A_zbitki_A0119_simple_pred_freq](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/individual/amu_pl_ilo_BAZA_2006A_zbitki_A0119_simple_pred_freq.png)
 
 ## General results
-Additionally, the script calculates different kinds of summed and mean relevancy arrays for all of the 191 speech samples in the testset.
+Additionally, the script calculates different kinds of summed and mean relevance arrays for all of the 191 speech samples in the testset.
 * Sum
 ![sum](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/sum.png)
 * Absolute sum
@@ -104,3 +104,20 @@ Additionally, the script calculates different kinds of summed and mean relevancy
 * Mean of negative values-only sum
 ![mean neg sum](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/mean_(negative_only_sum).png)
 
+### Feature group relevance
+Features were grouped into groups on three levels of granularity and their various means and standard deviations where plotted. Since the single most relevant feature (Voiced/Unvoiced or`VUV`) flattened the plots of the least relevant ones additional plots excluding the VUV were also added.
+The following examples show only the feature group means with and without VUVs. The rest of the plots can be found in the `results/plots/` directory of this repository.
+
+* Low granularity groups
+![general mean feats relevance](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/feature_relevance_ranking_-_mean_(sum)_-_general.png)
+![general mean feats relevance](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/feature_relevance_ranking_-_mean_(sum)_-_general_-_no_vuv.png)
+
+
+* Medium granularity groups
+![medium mean feats relevance](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/feature_relevance_ranking_-_mean_(sum)_-_detailed.png)
+![medium mean feats relevance](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/feature_relevance_ranking_-_mean_(sum)_-_detailed_-_no_vuv.png)
+
+
+* High granularity groups
+![all mean feats relevance](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/feature_relevance_ranking_-_mean_(sum)_-_all.png)
+![all mean feats relevance](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/feature_relevance_ranking_-_mean_(sum)_-_all_-_no_vuv.png)
