@@ -11,9 +11,23 @@ from matplotlib import colors, pyplot as plt, rc, ticker
 import const
 import settings
 from datasets import HTSDataset
-from feature_names import FEATURE_GROUPS, DETAILED_GROUPS, ALL_GROUPS
+from feature_names import (
+    FEATURE_GROUPS, DETAILED_GROUPS, ALL_GROUPS, SEGMENTAL_GROUPS, SYLLABIC_GROUPS, WORD_GROUPS, PHRASAL_GROUPS,
+    POSITIONAL_ABSOLUTE_GROUPS, POSITIONAL_RELATIVE_GROUPS, QUALITATIVE_GROUPS, COMPOSITIONAL_GROUPS,
+    PARENTAL_COMPOSITION_GROUPS, LINGUISTIC_LEVEL_GROUPS, FEATURE_TYPE_GROUPS, LINGUISTIC_LEVEL_WITH_FEATURE_TYPE_GROUPS
+)
 from net import build_net
 from train import pad_data
+
+
+LEVELS_OF_ABSTRACTION = [
+    FEATURE_GROUPS, SYLLABIC_GROUPS, WORD_GROUPS, FEATURE_TYPE_GROUPS, LINGUISTIC_LEVEL_GROUPS,
+    LINGUISTIC_LEVEL_WITH_FEATURE_TYPE_GROUPS
+]
+LEVELS_OF_ABSTRACTION_LABELS = [
+    'General feature category', 'Syllabic features', 'Word features', 'Feature type',
+    'Linguistic level', 'Linguistic level and feature type'
+]
 
 
 RESULTS_PATH = '/opt/ml/model'
@@ -113,7 +127,7 @@ def plot_colormesh(ax, analysis, linthresh, linscale, limits, cmap='PiYG'):
     return pcm
 
 
-def make_plots(analysis, y, preds, filename, linthresh=LINTHRESH, linscale=LINSCALE, logstep=LOGSTEP, title=None):
+def make_plots(analysis, y, preds, filename, linthresh=LINTHRESH, linscale=LINSCALE, logstep=LOGSTEP, title=None, y_ticks=None):
     f0_values_start_idx, f0_values_end_idx = np.where(y)[0][[0, -1]]
 
     fig = plt.figure()
@@ -129,7 +143,11 @@ def make_plots(analysis, y, preds, filename, linthresh=LINTHRESH, linscale=LINSC
     tick_locations = make_log_ticks(linthresh, logstep, vmin, vmax)
 
     plt.xlabel('Sample number (time)')
-    plt.ylabel('Feature index')
+    if y_ticks:
+        plt.ylabel('Feature')
+        plt.yticks(np.arange(0.5, len(y_ticks) + 0.5, 1), y_ticks, fontsize=4)
+    else:
+        plt.ylabel('Feature index')
     plt.xlim(0, f0_values_end_idx + f0_values_start_idx)
 
     color_ax = plt.subplot(gs[3])
@@ -162,7 +180,7 @@ def make_plots(analysis, y, preds, filename, linthresh=LINTHRESH, linscale=LINSC
 
 def _plot_group_results_df(df, title):
     fig, ax = plt.subplots()
-    plt.errorbar(df['group name'], df['group mean'], df['group std per feat'], marker='s', linestyle='none')
+    plt.errorbar(df['group name'], df['group mean'], df['group std per feat'], marker='s', linestyle='none', capsize=4, color='black')
     plt.setp(ax.get_xticklabels(), rotation='vertical', fontsize=4)
     plt.suptitle(title)
     filename = "_".join(title.lower().split())
@@ -258,6 +276,25 @@ def plot_predictions_freq(preds_freq, data, title, filename):
     plt.savefig(filename, bbox_inches='tight', pad_inches=0.5, dpi=600)
 
 
+def _group_and_plot_feature_relevance(analysis, y, preds, dataset, dataset_index ,feature_names, groups, file_label, txt_label):
+    analysis_t = analysis[0].T
+    analysis_w_feature_names = [(feature_names[index], analysis_t[index]) for index in range(analysis_t.shape[0])]
+    grouped_relevances = _group_feature_scores(analysis_w_feature_names, groups)
+    group_relevance_mean = []
+    group_relevance_sum = []
+    sorted_groups = sorted(grouped_relevances.keys(), reverse=True)
+    for feature_group_name in sorted_groups:
+        relevance_list = grouped_relevances[feature_group_name]
+        relevance_sum = np.array([values for feat_name, values in relevance_list]).sum(axis=0)
+        relevance_mean = relevance_sum / len(relevance_list)
+        group_relevance_mean.append(relevance_mean)
+        group_relevance_sum.append(relevance_sum)
+
+    make_plots(
+        np.array(group_relevance_mean), y.flatten(), preds, "_".join((file_label, dataset.data[dataset_index])),
+        title=txt_label, y_ticks=sorted_groups)
+
+
 def perform_analysis():
     hts_validation_dataset = setup_data()
     model = setup_model()
@@ -270,6 +307,15 @@ def perform_analysis():
     all_prediction_errors = []
 
     file_errors = []
+
+    with open(hts_validation_dataset.question_file_name) as qst_file:
+        questions = qst_file.readlines()
+
+    feature_names = [
+        re.sub("[\t\n]", "", re.sub('\"(.*)\"', "\g<1>", line))
+        for line in questions if line.strip()
+    ]
+    feature_names.append('vuv')
 
     for index, (X, y) in enumerate(hts_validation_dataset):
         basename = hts_validation_dataset.data[index].split(".")[0]
@@ -309,6 +355,10 @@ def perform_analysis():
         make_plots(
             analysis[0].T, y.flatten(), preds, hts_validation_dataset.data[index], title=txt_label)
 
+        for label, groups in zip(LEVELS_OF_ABSTRACTION_LABELS, LEVELS_OF_ABSTRACTION):
+            _group_and_plot_feature_relevance(
+                analysis, y, preds, hts_validation_dataset, index, feature_names, groups, label, txt_label)
+
         if index == 0:
             summed_vector = analysis[0]
             abs_summed_vector = np.abs(analysis[0])
@@ -323,15 +373,6 @@ def perform_analysis():
     print('Calculating general statistics...')
 
     pd.DataFrame(all_prediction_errors).set_index('file').to_csv(os.path.join(RESULTS_PATH, 'all_prediction_errors.csv'))
-
-    with open(hts_validation_dataset.question_file_name) as qst_file:
-        questions = qst_file.readlines()
-
-    feature_names = [
-        re.sub("[\t\n]", "", re.sub('\"(.*)\"', "\g<1>", line))
-        for line in questions if line.strip()
-    ]
-    feature_names.append('vuv')
 
     with open('log.txt', 'w') as log_fh:
         log_fh.writelines("\n".join(file_errors))
@@ -354,9 +395,23 @@ def perform_analysis():
     return summed_vectors, all_prediction_errors, feature_names
 
 
+def _group_feature_scores(feature_ranking, feature_groups):
+    group_individual_scores = {}
+
+    for feat, score in feature_ranking:
+        feat_group_names = [group_name for group_name, group_features in feature_groups.items() if feat in flatten(group_features)]
+        for feat_group_name in feat_group_names:
+            if group_individual_scores.get(feat_group_name):
+                group_individual_scores[feat_group_name].append((feat, score))
+            else:
+                group_individual_scores[feat_group_name] = [(feat, score), ]
+
+    return group_individual_scores
+
+
 def make_group_results_for_feature_groups(feature_ranking, feature_groups):
 
-    group_individual_scores = {}
+    group_individual_scores = _group_feature_scores(feature_ranking, feature_groups)
 
     for feat, score in feature_ranking:
         feat_group_names = [group_name for group_name, group_features in feature_groups.items() if feat in flatten(group_features)]
@@ -428,18 +483,12 @@ def make_results(return_results=False):
                 key = lambda x: x[0], reverse = True)
         feature_relevance_ranking = [(feature_names[feat[1]], feat[0]) for feat in feature_relevance_ranking]
 
-        general_results = make_group_results_for_feature_groups(
-            feature_relevance_ranking, FEATURE_GROUPS)
-        detailed_results = make_group_results_for_feature_groups(
-            feature_relevance_ranking, DETAILED_GROUPS)
-        all_groups_results = make_group_results_for_feature_groups(
-            feature_relevance_ranking, ALL_GROUPS)
 
-        results_dict = {
-            "general": general_results,
-            "detailed": detailed_results,
-            "all": all_groups_results,
-        }
+        results_dict = {}
+
+        for label, groups in zip(LEVELS_OF_ABSTRACTION_LABELS, LEVELS_OF_ABSTRACTION):
+            results_dict[label] = make_group_results_for_feature_groups(
+                feature_relevance_ranking, groups)
 
         if return_results:
             results[key] = results_dict
