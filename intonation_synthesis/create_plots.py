@@ -7,6 +7,7 @@ import pandas as pd
 import re
 import matplotlib
 from matplotlib import colors, pyplot as plt, rc, ticker
+from textwrap import wrap
 
 import const
 import settings
@@ -21,12 +22,18 @@ from train import pad_data
 
 
 LEVELS_OF_ABSTRACTION = [
-    FEATURE_GROUPS, SYLLABIC_GROUPS, WORD_GROUPS, FEATURE_TYPE_GROUPS, LINGUISTIC_LEVEL_GROUPS,
-    LINGUISTIC_LEVEL_WITH_FEATURE_TYPE_GROUPS
+    FEATURE_GROUPS, DETAILED_GROUPS, ALL_GROUPS, SYLLABIC_GROUPS, WORD_GROUPS, FEATURE_TYPE_GROUPS, LINGUISTIC_LEVEL_GROUPS,
+    LINGUISTIC_LEVEL_WITH_FEATURE_TYPE_GROUPS,
+
+    SEGMENTAL_GROUPS, PHRASAL_GROUPS, POSITIONAL_ABSOLUTE_GROUPS, POSITIONAL_RELATIVE_GROUPS, QUALITATIVE_GROUPS, COMPOSITIONAL_GROUPS,
+    PARENTAL_COMPOSITION_GROUPS
 ]
 LEVELS_OF_ABSTRACTION_LABELS = [
-    'General feature category', 'Syllabic features', 'Word features', 'Feature type',
-    'Linguistic level', 'Linguistic level and feature type'
+    'General feature categories', 'Detailed feature categories', 'All feature categories', 'Syllabic features', 'Word features', 'Relation types',
+    'Linguistic levels', 'Linguistic levels and relation types',
+
+    'Segmental features', 'Phrasal features', 'Positional features (absolute)', 'Positional features (relative)', 'Qualitative features', 'Compositional features',
+    'Features related to the composition of superior units'
 ]
 
 
@@ -40,7 +47,7 @@ DATASET_PATH = '/opt/ml/input/data/training/data/txt/'
 HYPERPARAMETERS_PATH = os.path.join(settings.WORKDIR, 'input/config', 'hyperparameters.json')
 
 # This should point to a directory containing a list of reference natural f0 (in Hz)
-REFERENCE_F0_DIR_PATH = '/other/5ms/f0'
+REFERENCE_F0_DIR_PATH = '/other/f0'
 
 # Plotting consts
 LINTHRESH = 3
@@ -169,9 +176,20 @@ def make_plots(analysis, y, preds, filename, linthresh=LINTHRESH, linscale=LINSC
 
     legend = ax2.legend(loc='lower left')
 
+    ax3 = plt.subplot(gs[1])
+    ax3.set_axis_off()
+    cell_text = []
+    row_labels = []
+    errors = calculate_errors(preds, y)
+    for error_name, error_value in errors.items():
+        if "file" in error_name.lower():
+            continue
+        row_labels.append(error_name)
+        cell_text.append([error_value])
+    ax3.table(cellText=cell_text, rowLabels=row_labels, loc="right")
+
     if title is not None:
         plt.suptitle(title)
-
     output_filename = filename.split('.')[0] + '.png'
 
     fig.savefig(os.path.join(RESULTS_PATH, output_filename), dpi=600, bbox_inches='tight', pad_inches=0.5)
@@ -182,7 +200,8 @@ def _plot_group_results_df(df, title):
     fig, ax = plt.subplots()
     plt.errorbar(df['group name'], df['group mean'], df['group std per feat'], marker='s', linestyle='none', capsize=4, color='black')
     plt.setp(ax.get_xticklabels(), rotation='vertical', fontsize=4)
-    plt.suptitle(title)
+    # plt.suptitle(title)
+    # TODO
     filename = "_".join(title.lower().split())
     plt.savefig(os.path.join(RESULTS_PATH, filename), bbox_inches='tight', pad_inches=0.5, dpi=600)
     plt.close('all')
@@ -272,8 +291,24 @@ def plot_predictions_freq(preds_freq, data, title, filename):
     plt.xlabel('Sample number (time)')
     plt.ylabel('Frequency [Hz]')
     plt.legend(['Predicted F0 (quadratic interpolation)', 'Ground truth'], loc='lower left')
-    plt.suptitle(title)
+    # TODO
+    # plt.suptitle(title)
     plt.savefig(filename, bbox_inches='tight', pad_inches=0.5, dpi=600)
+
+
+def plot_ground_truth_freq(freq, title, filename):
+    fig = plt.figure()
+    plt.plot(freq)
+    plt.xlabel('Sample number (time)')
+    plt.ylabel('Frequency [Hz]')
+    # TODO
+    # plt.suptitle(title)
+    plt.savefig(filename, bbox_inches='tight', pad_inches=0.5, dpi=600)
+
+
+def save_prompt(prompt, filename):
+    with open(filename, 'w') as prompt_fh:
+        prompt_fh.writelines(prompt)
 
 
 def _group_and_plot_feature_relevance(analysis, y, preds, dataset, dataset_index ,feature_names, groups, file_label, txt_label):
@@ -293,7 +328,6 @@ def _group_and_plot_feature_relevance(analysis, y, preds, dataset, dataset_index
     make_plots(
         np.array(group_relevance_mean), y.flatten(), preds, "_".join((file_label, dataset.data[dataset_index])),
         title=txt_label, y_ticks=sorted_groups)
-
 
 def perform_analysis():
     hts_validation_dataset = setup_data()
@@ -327,24 +361,27 @@ def perform_analysis():
         txt_label_filename = hts_validation_dataset.data[index].split('.')[0].split('_')[-1] + '.txt'
         txt_label_path = os.path.join(DATASET_PATH, txt_label_filename)
         with open(txt_label_path, 'r', encoding='cp1250') as txt_label_fh:
-            txt_label = u'"{}"'.format(" ".join(txt_label_fh.readlines()).strip())
-
-        print("Calculating prediction errors...")
-        current_errors = calculate_errors(preds, y.flatten())
-        current_errors['file'] = filename
-
-        all_prediction_errors.append(current_errors)
+            txt_label = u"{}".format(" ".join(txt_label_fh.readlines()).strip())
+            txt_label = '\n'.join(wrap(txt_label, 60))
 
         # Trim prediction array to the size of the original input to get rid of the zero-padded tail
         data = read_bin_file(filename)
         if data.shape[0] < np.where(preds)[0][[0, -1]][1]:
             file_errors.append(filename)
         preds = preds[:data.shape[0]]
+        ground_truth = y.flatten()[:data.shape[0]]
         # Get F0 from Log(F0)
         preds_freq = np.array([np.exp(val) if val != 0 else val for val in preds])
         preds_freq = adjust_predicted_f0_for_nsf_synth(preds_freq, data)
 
+        print("Calculating prediction errors...")
+
+        current_errors = calculate_errors(preds, ground_truth)
+        current_errors['file'] = filename
+        all_prediction_errors.append(current_errors)
+
         plot_predictions_freq(preds_freq, data, txt_label, os.path.join(RESULTS_PATH, basename + '_simple_pred_freq.png'))
+        plot_ground_truth_freq(freq=data, title=txt_label, filename=os.path.join(RESULTS_PATH, basename + '_simple_gt_freq.png'))
 
         filepath = os.path.join(RESULTS_PATH, filename)
         print("Saving prediction results {}...".format(filepath))
@@ -353,11 +390,13 @@ def perform_analysis():
 
         print("Plotting analysis results...")
         make_plots(
-            analysis[0].T, y.flatten(), preds, hts_validation_dataset.data[index], title=txt_label)
+            analysis[0].T, ground_truth, preds, hts_validation_dataset.data[index], title=txt_label)
+
+        save_prompt(txt_label, os.path.join(RESULTS_PATH, basename + 'prompt.txt'))
 
         for label, groups in zip(LEVELS_OF_ABSTRACTION_LABELS, LEVELS_OF_ABSTRACTION):
             _group_and_plot_feature_relevance(
-                analysis, y, preds, hts_validation_dataset, index, feature_names, groups, label, txt_label)
+                analysis, ground_truth, preds, hts_validation_dataset, index, feature_names, groups, label, txt_label)
 
         if index == 0:
             summed_vector = analysis[0]

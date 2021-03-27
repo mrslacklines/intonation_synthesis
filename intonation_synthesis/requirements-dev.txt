@@ -10,7 +10,7 @@ scipy
 sklearn
 tensorboard>=1.15.0,<1.16.0
 tensorflow-estimator>=1.15.0,<1.16.0
-tensorflow-gpu>=1.15.0,<1.16.0
+tensorflow>=1.15.0,<1.16.0
 seaborn
 kerassurgeon
 dtaidistance<2.0.0
