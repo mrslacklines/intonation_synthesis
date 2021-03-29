@@ -5,7 +5,6 @@ import numpy as np
 import os
 import pandas as pd
 import re
-import matplotlib
 from matplotlib import colors, pyplot as plt, rc, ticker
 from textwrap import wrap
 
@@ -19,7 +18,7 @@ from feature_names import (
 )
 from net import build_net
 from train import pad_data
-
+from utils import cm_to_inch
 
 LEVELS_OF_ABSTRACTION = [
     FEATURE_GROUPS, DETAILED_GROUPS, ALL_GROUPS, SYLLABIC_GROUPS, WORD_GROUPS, FEATURE_TYPE_GROUPS, LINGUISTIC_LEVEL_GROUPS,
@@ -37,7 +36,7 @@ LEVELS_OF_ABSTRACTION_LABELS = [
 ]
 
 
-RESULTS_PATH = '/opt/ml/model'
+RESULTS_PATH = '/opt/ml/model/'
 if not os.path.exists(RESULTS_PATH):
     os.makedirs(RESULTS_PATH)
 
@@ -137,9 +136,21 @@ def plot_colormesh(ax, analysis, linthresh, linscale, limits, cmap='PiYG'):
 def make_plots(analysis, y, preds, filename, linthresh=LINTHRESH, linscale=LINSCALE, logstep=LOGSTEP, title=None, y_ticks=None):
     f0_values_start_idx, f0_values_end_idx = np.where(y)[0][[0, -1]]
 
-    fig = plt.figure()
-    gs = grd.GridSpec(2, 2, height_ratios=[3, 6], width_ratios=[6, 1], wspace=0.1)
-    ax1 = plt.subplot(gs[2])
+    h_padding = 2
+    if y_ticks:
+        grid_height_ratio_lrp_param = (2 * len(y_ticks)) / 20
+        grid_height_ratio_lrp_param = grid_height_ratio_lrp_param if grid_height_ratio_lrp_param else 1
+        fig_width_modifier = len(max(y_ticks, key=len)) * 0.1
+    else:
+        grid_height_ratio_lrp_param = 6
+        fig_width_modifier = 0
+    height_ratios = [1, grid_height_ratio_lrp_param, 1]
+
+    fig_size = cm_to_inch(19 + fig_width_modifier), 3 * cm_to_inch(3 + grid_height_ratio_lrp_param + (2 * h_padding))
+
+    fig = plt.figure(figsize=fig_size)
+    gs = grd.GridSpec(3, 1, height_ratios=height_ratios, wspace=0.25)
+    ax1 = plt.subplot(gs[1])
 
     vmin = analysis.min()
     vmax = analysis.max()
@@ -151,15 +162,17 @@ def make_plots(analysis, y, preds, filename, linthresh=LINTHRESH, linscale=LINSC
 
     plt.xlabel('Sample number (time)')
     if y_ticks:
-        plt.ylabel('Feature')
-        plt.yticks(np.arange(0.5, len(y_ticks) + 0.5, 1), y_ticks, fontsize=4)
+        # plt.ylabel('Feature')
+        plt.yticks(np.arange(0.5, len(y_ticks) + 0.5, 1), y_ticks, fontsize=8)
     else:
         plt.ylabel('Feature index')
     plt.xlim(0, f0_values_end_idx + f0_values_start_idx)
 
-    color_ax = plt.subplot(gs[3])
-    cb = plt.colorbar(pcm, cax=color_ax, ticks=tick_locations, format=ticker.LogFormatterMathtext())
-    cb.set_label('log-normalized LRP.Z')
+    color_ax = plt.subplot(gs[2])
+    cb = plt.colorbar(
+        pcm, cax=color_ax, ticks=tick_locations, format=ticker.LogFormatterMathtext(), orientation="horizontal")
+    cb.set_label('Log-normalized relevance (LRP-Zero)')
+    color_ax.set_aspect(0.01, anchor="N")
 
     ax2 = plt.subplot(gs[0], sharex=ax1)
 
@@ -168,41 +181,50 @@ def make_plots(analysis, y, preds, filename, linthresh=LINTHRESH, linscale=LINSC
     ax2.xaxis.set_ticks_position('bottom')
     ax2.yaxis.set_ticks_position('left')
 
-    ax2.plot(preds, 'k', zorder=5, lw=0.5, label=r'Predicted F0')
-    ax2.plot(y, 'k', linestyle=':', alpha=0.3, zorder=0, lw=0.5, label='Ground truth')
-    ax2.set_ylabel('Log F0')
+    ax2.plot(preds, 'k', zorder=5, lw=0.5, label=r'Predicted $F_{0}$', color="red")
+    ax2.plot(y, 'k', zorder=0, lw=0.5, label='Ground truth', color='green')
+    ax2.set_ylabel('$F_{0}$')
     plt.xlim(0, f0_values_end_idx + f0_values_start_idx)
-    plt.ylim(0, 5)
+    plt.ylim(60, 200)
 
-    legend = ax2.legend(loc='lower left')
+    legend = ax2.legend(loc='upper right')
+    ax2.set_aspect(0.5, anchor="S")
 
-    ax3 = plt.subplot(gs[1])
-    ax3.set_axis_off()
-    cell_text = []
-    row_labels = []
-    errors = calculate_errors(preds, y)
-    for error_name, error_value in errors.items():
-        if "file" in error_name.lower():
-            continue
-        row_labels.append(error_name)
-        cell_text.append([error_value])
-    ax3.table(cellText=cell_text, rowLabels=row_labels, loc="right")
+    # ax3 = plt.subplot(gs[0])
+    # ax3.set_axis_off()
+    # cell_text = []
+    # row_labels = []
+    # errors = calculate_errors(preds, y)
+    # for error_name, error_value in errors.items():
+    #     if "file" in error_name.lower():
+    #         continue
+    #     row_labels.append(error_name)
+    #     cell_text.append([error_value])
+    # ax3.table(cellText=cell_text, rowLabels=row_labels, loc="right")
 
-    if title is not None:
-        plt.suptitle(title)
-    output_filename = filename.split('.')[0] + '.png'
+    # if title is not None:
+        # plt.suptitle(title)
+
+    gs.tight_layout(fig, h_pad=h_padding)
+
+    output_filename = "_".join(filename.split('.')[0].lower().split()) + '.png'
 
     fig.savefig(os.path.join(RESULTS_PATH, output_filename), dpi=600, bbox_inches='tight', pad_inches=0.5)
     plt.close('all')
 
 
 def _plot_group_results_df(df, title):
-    fig, ax = plt.subplots()
+    width = cm_to_inch(len(df['group name'].values) * 0.5)
+    MIN_WIDTH = 6
+    width = width if width > MIN_WIDTH else MIN_WIDTH
+    fig_size = [width, cm_to_inch(12)]
+    fig, ax = plt.subplots(figsize=fig_size)
     plt.errorbar(df['group name'], df['group mean'], df['group std per feat'], marker='s', linestyle='none', capsize=4, color='black')
-    plt.setp(ax.get_xticklabels(), rotation='vertical', fontsize=4)
+    plt.setp(ax.get_xticklabels(), rotation='vertical', fontsize=8)
     # plt.suptitle(title)
     # TODO
     filename = "_".join(title.lower().split())
+
     plt.savefig(os.path.join(RESULTS_PATH, filename), bbox_inches='tight', pad_inches=0.5, dpi=600)
     plt.close('all')
 
@@ -326,7 +348,8 @@ def _group_and_plot_feature_relevance(analysis, y, preds, dataset, dataset_index
         group_relevance_sum.append(relevance_sum)
 
     make_plots(
-        np.array(group_relevance_mean), y.flatten(), preds, "_".join((file_label, dataset.data[dataset_index])),
+        np.array(group_relevance_mean), y.flatten(), preds,
+        "_".join((*file_label.lower().split(), dataset.data[dataset_index])),
         title=txt_label, y_ticks=sorted_groups)
 
 def perform_analysis():
@@ -352,6 +375,8 @@ def perform_analysis():
     feature_names.append('vuv')
 
     for index, (X, y) in enumerate(hts_validation_dataset):
+        if index >= 5:
+            break
         basename = hts_validation_dataset.data[index].split(".")[0]
         filename = basename + ".f0"
         print("Analysing {}...".format(basename))
@@ -370,13 +395,14 @@ def perform_analysis():
             file_errors.append(filename)
         preds = preds[:data.shape[0]]
         ground_truth = y.flatten()[:data.shape[0]]
+        ground_truth_freq = np.array([np.exp(val) if val != 0 else val for val in ground_truth])
         # Get F0 from Log(F0)
         preds_freq = np.array([np.exp(val) if val != 0 else val for val in preds])
         preds_freq = adjust_predicted_f0_for_nsf_synth(preds_freq, data)
 
         print("Calculating prediction errors...")
 
-        current_errors = calculate_errors(preds, ground_truth)
+        current_errors = calculate_errors(preds_freq, ground_truth_freq)
         current_errors['file'] = filename
         all_prediction_errors.append(current_errors)
 
@@ -390,13 +416,13 @@ def perform_analysis():
 
         print("Plotting analysis results...")
         make_plots(
-            analysis[0].T, ground_truth, preds, hts_validation_dataset.data[index], title=txt_label)
+            analysis[0].T, data, preds_freq, hts_validation_dataset.data[index], title=txt_label)
 
-        save_prompt(txt_label, os.path.join(RESULTS_PATH, basename + 'prompt.txt'))
+        save_prompt(txt_label, os.path.join(RESULTS_PATH, basename + '_prompt.txt'))
 
         for label, groups in zip(LEVELS_OF_ABSTRACTION_LABELS, LEVELS_OF_ABSTRACTION):
             _group_and_plot_feature_relevance(
-                analysis, ground_truth, preds, hts_validation_dataset, index, feature_names, groups, label, txt_label)
+                analysis, data, preds_freq, hts_validation_dataset, index, feature_names, groups, label, txt_label)
 
         if index == 0:
             summed_vector = analysis[0]
@@ -512,7 +538,7 @@ def make_results(return_results=False):
         plt.ylabel('Feature index')
         ax2 = plt.subplot(gs[1])
         cb = plt.colorbar(pcm, cax=ax2, ticks=tick_locations, format=ticker.LogFormatterMathtext())
-        cb.set_label('log-normalized LRP.Z.')
+        cb.set_label('Log-normalized relevance (LRP-Zero)')
 
         fig.savefig(os.path.join(RESULTS_PATH, "{}.png".format("_".join(key.lower().split()))), bbox_inches='tight', pad_inches=0.5, dpi=600)
         plt.close("all")
