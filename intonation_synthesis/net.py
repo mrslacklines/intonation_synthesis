@@ -16,7 +16,7 @@ def build_net(hidden_size, num_layers, dropout, gpus=0):
         nb_filters=hidden_size, kernel_size=2, nb_stacks=num_layers,
         dilations=[1, 2, 4, 8, 16, 32], padding='causal',
         use_skip_connections=True, dropout_rate=dropout, return_sequences=True,
-        use_batch_norm=True, input_shape=(const.MAX_LEN, const.FEATURES_ORDER))
+        use_batch_norm=True, use_layer_norm=False, input_shape=(const.MAX_LEN, const.FEATURES_ORDER))
     )
     model.add(Dense(hidden_size, activation='relu'))
     model.add(Dense(1, activation='relu'))

@@ -133,3 +133,7 @@ def predict(data, save=True, dir='./results/test_predictions/'):
             save_preds_to_file(preds, filepaths)
 
     return preds_list
+
+
+def cm_to_inch(value):
+    return value / 2.54

@@ -5,18 +5,38 @@ import numpy as np
 import os
 import pandas as pd
 import re
-import matplotlib
 from matplotlib import colors, pyplot as plt, rc, ticker
+from textwrap import wrap
 
 import const
 import settings
 from datasets import HTSDataset
-from feature_names import FEATURE_GROUPS, DETAILED_GROUPS, ALL_GROUPS
+from feature_names import (
+    FEATURE_GROUPS, DETAILED_GROUPS, ALL_GROUPS, SEGMENTAL_GROUPS, SYLLABIC_GROUPS, WORD_GROUPS, PHRASAL_GROUPS,
+    POSITIONAL_ABSOLUTE_GROUPS, POSITIONAL_RELATIVE_GROUPS, QUALITATIVE_GROUPS, COMPOSITIONAL_GROUPS,
+    PARENTAL_COMPOSITION_GROUPS, LINGUISTIC_LEVEL_GROUPS, FEATURE_TYPE_GROUPS, LINGUISTIC_LEVEL_WITH_FEATURE_TYPE_GROUPS
+)
 from net import build_net
 from train import pad_data
+from utils import cm_to_inch
+
+LEVELS_OF_ABSTRACTION = [
+    FEATURE_GROUPS, DETAILED_GROUPS, ALL_GROUPS, SYLLABIC_GROUPS, WORD_GROUPS, FEATURE_TYPE_GROUPS, LINGUISTIC_LEVEL_GROUPS,
+    LINGUISTIC_LEVEL_WITH_FEATURE_TYPE_GROUPS,
+
+    SEGMENTAL_GROUPS, PHRASAL_GROUPS, POSITIONAL_ABSOLUTE_GROUPS, POSITIONAL_RELATIVE_GROUPS, QUALITATIVE_GROUPS, COMPOSITIONAL_GROUPS,
+    PARENTAL_COMPOSITION_GROUPS
+]
+LEVELS_OF_ABSTRACTION_LABELS = [
+    'General feature categories', 'Detailed feature categories', 'All feature categories', 'Syllabic features', 'Word features', 'Relation types',
+    'Linguistic levels', 'Linguistic levels and relation types',
+
+    'Segmental features', 'Phrasal features', 'Positional features (absolute)', 'Positional features (relative)', 'Qualitative features', 'Compositional features',
+    'Features related to the composition of superior units'
+]
 
 
-RESULTS_PATH = '/opt/ml/model'
+RESULTS_PATH = '/opt/ml/model/'
 if not os.path.exists(RESULTS_PATH):
     os.makedirs(RESULTS_PATH)
 
@@ -26,7 +46,7 @@ DATASET_PATH = '/opt/ml/input/data/training/data/txt/'
 HYPERPARAMETERS_PATH = os.path.join(settings.WORKDIR, 'input/config', 'hyperparameters.json')
 
 # This should point to a directory containing a list of reference natural f0 (in Hz)
-REFERENCE_F0_DIR_PATH = '/other/5ms/f0'
+REFERENCE_F0_DIR_PATH = '/other/f0'
 
 # Plotting consts
 LINTHRESH = 3
@@ -104,6 +124,11 @@ def plot_colormesh(ax, analysis, linthresh, linscale, limits, cmap='PiYG'):
         cmap = 'Greens'
     elif not vmax > 0.0:
         cmap = 'Greens_r'
+    elif vmin < 0.0 and vmax > 0.0:
+        v_max_abs = max([abs(vmin), abs(vmax)])
+        vmin = -v_max_abs
+        vmax = v_max_abs
+
     pcm = ax.pcolormesh(
         analysis, norm=colors.SymLogNorm(
             10**-linthresh, linscale=linscale,
@@ -113,12 +138,24 @@ def plot_colormesh(ax, analysis, linthresh, linscale, limits, cmap='PiYG'):
     return pcm
 
 
-def make_plots(analysis, y, preds, filename, linthresh=LINTHRESH, linscale=LINSCALE, logstep=LOGSTEP, title=None):
+def make_plots(analysis, y, preds, filename, linthresh=LINTHRESH, linscale=LINSCALE, logstep=LOGSTEP, title=None, y_ticks=None):
     f0_values_start_idx, f0_values_end_idx = np.where(y)[0][[0, -1]]
 
-    fig = plt.figure()
-    gs = grd.GridSpec(2, 2, height_ratios=[3, 6], width_ratios=[6, 1], wspace=0.1)
-    ax1 = plt.subplot(gs[2])
+    h_padding = 2
+    if y_ticks:
+        grid_height_ratio_lrp_param = (2 * len(y_ticks)) / 20
+        grid_height_ratio_lrp_param = grid_height_ratio_lrp_param if grid_height_ratio_lrp_param else 1
+        fig_width_modifier = len(max(y_ticks, key=len)) * 0.1
+    else:
+        grid_height_ratio_lrp_param = 6
+        fig_width_modifier = 0
+    height_ratios = [1, grid_height_ratio_lrp_param, 1]
+
+    fig_size = cm_to_inch(19 + fig_width_modifier), 3 * cm_to_inch(3 + grid_height_ratio_lrp_param + (2 * h_padding))
+
+    fig = plt.figure(figsize=fig_size)
+    gs = grd.GridSpec(3, 1, height_ratios=height_ratios, wspace=0.25)
+    ax1 = plt.subplot(gs[1])
 
     vmin = analysis.min()
     vmax = analysis.max()
@@ -129,12 +166,18 @@ def make_plots(analysis, y, preds, filename, linthresh=LINTHRESH, linscale=LINSC
     tick_locations = make_log_ticks(linthresh, logstep, vmin, vmax)
 
     plt.xlabel('Sample number (time)')
-    plt.ylabel('Feature index')
+    if y_ticks:
+        # plt.ylabel('Feature')
+        plt.yticks(np.arange(0.5, len(y_ticks) + 0.5, 1), y_ticks, fontsize=8)
+    else:
+        plt.ylabel('Feature index')
     plt.xlim(0, f0_values_end_idx + f0_values_start_idx)
 
-    color_ax = plt.subplot(gs[3])
-    cb = plt.colorbar(pcm, cax=color_ax, ticks=tick_locations, format=ticker.LogFormatterMathtext())
-    cb.set_label('log-normalized LRP.Z')
+    color_ax = plt.subplot(gs[2])
+    cb = plt.colorbar(
+        pcm, cax=color_ax, ticks=tick_locations, format=ticker.LogFormatterMathtext(), orientation="horizontal")
+    cb.set_label('Log-normalized relevance (LRP-Zero)')
+    color_ax.set_aspect(0.01, anchor="N")
 
     ax2 = plt.subplot(gs[0], sharex=ax1)
 
@@ -143,29 +186,50 @@ def make_plots(analysis, y, preds, filename, linthresh=LINTHRESH, linscale=LINSC
     ax2.xaxis.set_ticks_position('bottom')
     ax2.yaxis.set_ticks_position('left')
 
-    ax2.plot(preds, 'k', zorder=5, lw=0.5, label=r'Predicted F0')
-    ax2.plot(y, 'k', linestyle=':', alpha=0.3, zorder=0, lw=0.5, label='Ground truth')
-    ax2.set_ylabel('Log F0')
+    ax2.plot(preds, 'k', zorder=5, lw=0.5, label=r'Predicted $F_{0}$', color="red")
+    ax2.plot(y, 'k', zorder=0, lw=0.5, label='Ground truth', color='green')
+    ax2.set_ylabel('$F_{0}$')
     plt.xlim(0, f0_values_end_idx + f0_values_start_idx)
-    plt.ylim(0, 5)
+    plt.ylim(60, 200)
 
-    legend = ax2.legend(loc='lower left')
+    legend = ax2.legend(loc='upper right')
+    ax2.set_aspect(0.5, anchor="S")
 
-    if title is not None:
-        plt.suptitle(title)
+    # ax3 = plt.subplot(gs[0])
+    # ax3.set_axis_off()
+    # cell_text = []
+    # row_labels = []
+    # errors = calculate_errors(preds, y)
+    # for error_name, error_value in errors.items():
+    #     if "file" in error_name.lower():
+    #         continue
+    #     row_labels.append(error_name)
+    #     cell_text.append([error_value])
+    # ax3.table(cellText=cell_text, rowLabels=row_labels, loc="right")
 
-    output_filename = filename.split('.')[0] + '.png'
+    # if title is not None:
+        # plt.suptitle(title)
+
+    gs.tight_layout(fig, h_pad=h_padding)
+
+    output_filename = "_".join(filename.split('.')[0].lower().split()) + '.png'
 
     fig.savefig(os.path.join(RESULTS_PATH, output_filename), dpi=600, bbox_inches='tight', pad_inches=0.5)
     plt.close('all')
 
 
 def _plot_group_results_df(df, title):
-    fig, ax = plt.subplots()
-    plt.errorbar(df['group name'], df['group mean'], df['group std per feat'], marker='s', linestyle='none')
-    plt.setp(ax.get_xticklabels(), rotation='vertical', fontsize=4)
-    plt.suptitle(title)
+    width = cm_to_inch(len(df['group name'].values) * 0.5)
+    MIN_WIDTH = 6
+    width = width if width > MIN_WIDTH else MIN_WIDTH
+    fig_size = [width, cm_to_inch(12)]
+    fig, ax = plt.subplots(figsize=fig_size)
+    plt.errorbar(df['group name'], df['group mean'], df['group std per feat'], marker='s', linestyle='none', capsize=4, color='black')
+    plt.setp(ax.get_xticklabels(), rotation='vertical', fontsize=8)
+    # plt.suptitle(title)
+    # TODO
     filename = "_".join(title.lower().split())
+
     plt.savefig(os.path.join(RESULTS_PATH, filename), bbox_inches='tight', pad_inches=0.5, dpi=600)
     plt.close('all')
 
@@ -254,9 +318,44 @@ def plot_predictions_freq(preds_freq, data, title, filename):
     plt.xlabel('Sample number (time)')
     plt.ylabel('Frequency [Hz]')
     plt.legend(['Predicted F0 (quadratic interpolation)', 'Ground truth'], loc='lower left')
-    plt.suptitle(title)
+    # TODO
+    # plt.suptitle(title)
     plt.savefig(filename, bbox_inches='tight', pad_inches=0.5, dpi=600)
 
+
+def plot_ground_truth_freq(freq, title, filename):
+    fig = plt.figure()
+    plt.plot(freq)
+    plt.xlabel('Sample number (time)')
+    plt.ylabel('Frequency [Hz]')
+    # TODO
+    # plt.suptitle(title)
+    plt.savefig(filename, bbox_inches='tight', pad_inches=0.5, dpi=600)
+
+
+def save_prompt(prompt, filename):
+    with open(filename, 'w') as prompt_fh:
+        prompt_fh.writelines(prompt)
+
+
+def _group_and_plot_feature_relevance(analysis, y, preds, dataset, dataset_index ,feature_names, groups, file_label, txt_label):
+    analysis_t = analysis[0].T
+    analysis_w_feature_names = [(feature_names[index], analysis_t[index]) for index in range(analysis_t.shape[0])]
+    grouped_relevances = _group_feature_scores(analysis_w_feature_names, groups)
+    group_relevance_mean = []
+    group_relevance_sum = []
+    sorted_groups = sorted(grouped_relevances.keys(), reverse=True)
+    for feature_group_name in sorted_groups:
+        relevance_list = grouped_relevances[feature_group_name]
+        relevance_sum = np.array([values for feat_name, values in relevance_list]).sum(axis=0)
+        relevance_mean = relevance_sum / len(relevance_list)
+        group_relevance_mean.append(relevance_mean)
+        group_relevance_sum.append(relevance_sum)
+
+    make_plots(
+        np.array(group_relevance_mean), y.flatten(), preds,
+        "_".join((*file_label.lower().split(), dataset.data[dataset_index])),
+        title=txt_label, y_ticks=sorted_groups)
 
 def perform_analysis():
     hts_validation_dataset = setup_data()
@@ -271,6 +370,15 @@ def perform_analysis():
 
     file_errors = []
 
+    with open(hts_validation_dataset.question_file_name) as qst_file:
+        questions = qst_file.readlines()
+
+    feature_names = [
+        re.sub("[\t\n]", "", re.sub('\"(.*)\"', "\g<1>", line))
+        for line in questions if line.strip()
+    ]
+    feature_names.append('vuv')
+
     for index, (X, y) in enumerate(hts_validation_dataset):
         basename = hts_validation_dataset.data[index].split(".")[0]
         filename = basename + ".f0"
@@ -281,24 +389,28 @@ def perform_analysis():
         txt_label_filename = hts_validation_dataset.data[index].split('.')[0].split('_')[-1] + '.txt'
         txt_label_path = os.path.join(DATASET_PATH, txt_label_filename)
         with open(txt_label_path, 'r', encoding='cp1250') as txt_label_fh:
-            txt_label = u'"{}"'.format(" ".join(txt_label_fh.readlines()).strip())
-
-        print("Calculating prediction errors...")
-        current_errors = calculate_errors(preds, y.flatten())
-        current_errors['file'] = filename
-
-        all_prediction_errors.append(current_errors)
+            txt_label = u"{}".format(" ".join(txt_label_fh.readlines()).strip())
+            txt_label = '\n'.join(wrap(txt_label, 60))
 
         # Trim prediction array to the size of the original input to get rid of the zero-padded tail
         data = read_bin_file(filename)
         if data.shape[0] < np.where(preds)[0][[0, -1]][1]:
             file_errors.append(filename)
         preds = preds[:data.shape[0]]
+        ground_truth = y.flatten()[:data.shape[0]]
+        ground_truth_freq = np.array([np.exp(val) if val != 0 else val for val in ground_truth])
         # Get F0 from Log(F0)
         preds_freq = np.array([np.exp(val) if val != 0 else val for val in preds])
         preds_freq = adjust_predicted_f0_for_nsf_synth(preds_freq, data)
 
+        print("Calculating prediction errors...")
+
+        current_errors = calculate_errors(preds_freq, ground_truth_freq)
+        current_errors['file'] = filename
+        all_prediction_errors.append(current_errors)
+
         plot_predictions_freq(preds_freq, data, txt_label, os.path.join(RESULTS_PATH, basename + '_simple_pred_freq.png'))
+        plot_ground_truth_freq(freq=data, title=txt_label, filename=os.path.join(RESULTS_PATH, basename + '_simple_gt_freq.png'))
 
         filepath = os.path.join(RESULTS_PATH, filename)
         print("Saving prediction results {}...".format(filepath))
@@ -307,7 +419,13 @@ def perform_analysis():
 
         print("Plotting analysis results...")
         make_plots(
-            analysis[0].T, y.flatten(), preds, hts_validation_dataset.data[index], title=txt_label)
+            analysis[0].T, data, preds_freq, hts_validation_dataset.data[index], title=txt_label)
+
+        save_prompt(txt_label, os.path.join(RESULTS_PATH, basename + '_prompt.txt'))
+
+        for label, groups in zip(LEVELS_OF_ABSTRACTION_LABELS, LEVELS_OF_ABSTRACTION):
+            _group_and_plot_feature_relevance(
+                analysis, data, preds_freq, hts_validation_dataset, index, feature_names, groups, label, txt_label)
 
         if index == 0:
             summed_vector = analysis[0]
@@ -323,15 +441,6 @@ def perform_analysis():
     print('Calculating general statistics...')
 
     pd.DataFrame(all_prediction_errors).set_index('file').to_csv(os.path.join(RESULTS_PATH, 'all_prediction_errors.csv'))
-
-    with open(hts_validation_dataset.question_file_name) as qst_file:
-        questions = qst_file.readlines()
-
-    feature_names = [
-        re.sub("[\t\n]", "", re.sub('\"(.*)\"', "\g<1>", line))
-        for line in questions if line.strip()
-    ]
-    feature_names.append('vuv')
 
     with open('log.txt', 'w') as log_fh:
         log_fh.writelines("\n".join(file_errors))
@@ -354,9 +463,23 @@ def perform_analysis():
     return summed_vectors, all_prediction_errors, feature_names
 
 
+def _group_feature_scores(feature_ranking, feature_groups):
+    group_individual_scores = {}
+
+    for feat, score in feature_ranking:
+        feat_group_names = [group_name for group_name, group_features in feature_groups.items() if feat in flatten(group_features)]
+        for feat_group_name in feat_group_names:
+            if group_individual_scores.get(feat_group_name):
+                group_individual_scores[feat_group_name].append((feat, score))
+            else:
+                group_individual_scores[feat_group_name] = [(feat, score), ]
+
+    return group_individual_scores
+
+
 def make_group_results_for_feature_groups(feature_ranking, feature_groups):
 
-    group_individual_scores = {}
+    group_individual_scores = _group_feature_scores(feature_ranking, feature_groups)
 
     for feat, score in feature_ranking:
         feat_group_names = [group_name for group_name, group_features in feature_groups.items() if feat in flatten(group_features)]
@@ -418,7 +541,7 @@ def make_results(return_results=False):
         plt.ylabel('Feature index')
         ax2 = plt.subplot(gs[1])
         cb = plt.colorbar(pcm, cax=ax2, ticks=tick_locations, format=ticker.LogFormatterMathtext())
-        cb.set_label('log-normalized LRP.Z.')
+        cb.set_label('Log-normalized relevance (LRP-Zero)')
 
         fig.savefig(os.path.join(RESULTS_PATH, "{}.png".format("_".join(key.lower().split()))), bbox_inches='tight', pad_inches=0.5, dpi=600)
         plt.close("all")
@@ -428,18 +551,12 @@ def make_results(return_results=False):
                 key = lambda x: x[0], reverse = True)
         feature_relevance_ranking = [(feature_names[feat[1]], feat[0]) for feat in feature_relevance_ranking]
 
-        general_results = make_group_results_for_feature_groups(
-            feature_relevance_ranking, FEATURE_GROUPS)
-        detailed_results = make_group_results_for_feature_groups(
-            feature_relevance_ranking, DETAILED_GROUPS)
-        all_groups_results = make_group_results_for_feature_groups(
-            feature_relevance_ranking, ALL_GROUPS)
 
-        results_dict = {
-            "general": general_results,
-            "detailed": detailed_results,
-            "all": all_groups_results,
-        }
+        results_dict = {}
+
+        for label, groups in zip(LEVELS_OF_ABSTRACTION_LABELS, LEVELS_OF_ABSTRACTION):
+            results_dict[label] = make_group_results_for_feature_groups(
+                feature_relevance_ranking, groups)
 
         if return_results:
             results[key] = results_dict
