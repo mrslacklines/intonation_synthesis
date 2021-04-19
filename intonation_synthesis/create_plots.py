@@ -124,6 +124,11 @@ def plot_colormesh(ax, analysis, linthresh, linscale, limits, cmap='PiYG'):
         cmap = 'Greens'
     elif not vmax > 0.0:
         cmap = 'Greens_r'
+    elif vmin < 0.0 and vmax > 0.0:
+        v_max_abs = max([abs(vmin), abs(vmax)])
+        vmin = -v_max_abs
+        vmax = v_max_abs
+
     pcm = ax.pcolormesh(
         analysis, norm=colors.SymLogNorm(
             10**-linthresh, linscale=linscale,
@@ -375,8 +380,6 @@ def perform_analysis():
     feature_names.append('vuv')
 
     for index, (X, y) in enumerate(hts_validation_dataset):
-        if index >= 5:
-            break
         basename = hts_validation_dataset.data[index].split(".")[0]
         filename = basename + ".f0"
         print("Analysing {}...".format(basename))
