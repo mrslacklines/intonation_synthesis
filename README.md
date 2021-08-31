@@ -80,10 +80,10 @@ The results are also available under `results/` in this repository. Below you ca
 
 ## Individual results
 The generated results include invidual analyses for each of the testset recordings. Each analysis comprises of a Layer-wise Relevance Propagation result heatmap aligned with the actual fundamental frequency plotted against the predicted values. The title of each plot is an ortographic transcription of the utterance, i.e.:
-![amu_pl_ilo_BAZA_2006A_zbitki_A0119](https://github.com/mrslacklines/intonation_synthesis/tree/master/intonation_synthesis/results/relevance/plots/raw/amu_pl_ilo_BAZA_2006A_zbitki_A0119.png)
+![amu_pl_ilo_BAZA_2006A_zbitki_A0119](https://github.com/mrslacklines/intonation_synthesis/tree/master/intonation_synthesis/results/relevance/plots/raw/amu_pl_ilo_baza_2006a_zbitki_a0119.png)
 
 Additionally, the predicted F0 is plotted on a separate figure.
-![amu_pl_ilo_BAZA_2006A_zbitki_A0119_simple_pred_freq](https://github.com/mrslacklines/intonation_synthesis/tree/master/intonation_synthesis/results/f0/preds/amu_pl_ilo_BAZA_2006A_zbitki_A0119_simple_pred_freq.png)
+![amu_pl_ilo_BAZA_2006A_zbitki_A0119_simple_pred_freq](https://github.com/mrslacklines/intonation_synthesis/tree/master/intonation_synthesis/results/f0/preds/amu_pl_ilo_baza_2006a_zbitki_a0119_simple_pred_freq.png)
 
 ## General results
 Additionally, the script calculates different kinds of summed and mean relevance arrays for all of the 191 speech samples in the testset.
