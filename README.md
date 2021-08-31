@@ -16,7 +16,7 @@ or
 to build for local development.
 
 ## Run training locally
-In order to run the training container locally you need to mount you dataset to the docker container to emulate the SageMaker environment, i.e.
+In order to run the training container locally you need to mount your dataset to the docker container to emulate the SageMaker environment, i.e.
 
 If your data lives in `/media/tomaszk/DANE/Speech_archive/HTS-demo_AMU_PL_ILO_STRAIGHT` on the host machine like mine does, you can simply:
 
