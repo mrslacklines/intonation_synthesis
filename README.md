@@ -122,12 +122,12 @@ Individual features were additionally grouped into many different groups on vari
 
 ### Feature group rankings
 
-https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/rankings/plots/feature_relevance_ranking_-_absolute_sum_-_all_feature_categories.png
+![feature_relevance_ranking_-_absolute_sum_-_all_feature_categories](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/rankings/plots/feature_relevance_ranking_-_absolute_sum_-_all_feature_categories.png)
 
 The single most relevant feature (VUV) was removed to avoid scaling of the plot. 
 
-https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/rankings/plots/feature_relevance_ranking_-_absolute_sum_-_all_feature_categories_-_no_vuv.png
+![feature_relevance_ranking_-_absolute_sum_-_all_feature_categories_-_no_vuv](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/rankings/plots/feature_relevance_ranking_-_absolute_sum_-_all_feature_categories_-_no_vuv.png)
 
-https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/rankings/plots/feature_relevance_ranking_-_mean_(absolute_sum)_-_detailed_feature_categories_-_no_vuv.png
+![feature_relevance_ranking_-_mean_(absolute_sum)_-_detailed_feature_categories_-_no_vuv](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/rankings/plots/feature_relevance_ranking_-_mean_(absolute_sum)_-_detailed_feature_categories_-_no_vuv.png)
 
-https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/rankings/plots/feature_relevance_ranking_-_mean_(absolute_sum)_-_general_feature_categories_-_no_vuv.png
+![feature_relevance_ranking_-_mean_(absolute_sum)_-_general_feature_categories_-_no_vuv](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/rankings/plots/feature_relevance_ranking_-_mean_(absolute_sum)_-_general_feature_categories_-_no_vuv.png)
