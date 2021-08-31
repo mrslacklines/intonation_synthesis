@@ -1,7 +1,7 @@
 # Explainable Deep Neural F0 Model of Polish Read Speech
 This projects aims at training a deep neural network for modelling Polish read speech F0 and exploring the relevance of input linguistic features on the predicted F0 contours.
-Currently we are using AWS SageMaker as the cloud service for running both the training and inference. The generation of feature relevance and plotting can be run both in cloud and locally.
-This project is the main part of my PhD dissertation, which I (**Tomasz Kuczmarski**) am currently writing up. Keep your fingers crossed :).
+Currently I am using the AWS SageMaker as a cloud service for running both the training and inference. The generation of feature relevance and plotting can be run both in cloud and locally.
+This project is the main part of my (**Tomasz Kuczmarski**) PhD dissertation, which is currently undergoing the reviews. Keep your fingers crossed :).
 
 ## Build containers
 Build and push a docker container to the Amazon Web Services ECR repository
@@ -73,51 +73,61 @@ You might need to adjust the variables to suit your needs.
 
 
 ## Generating feature relevance reports and plots
-This part still needs documenting. For the time being please inspect the `create_plots.py` and `Dockerfile-plots` files. These are run in the same manner as the training part. This part generates rich results including LRP.Z analysis plots for individual files, different types of mean LRP plots for the whole dataset and a number of CSV files with feature relevance rankings and prediction MSE calculations. I promise I will document those when I finish writing the paper :).
+Please inspect the `create_plots.py` and `Dockerfile-plots` files. These are run in the same manner as the training part. This part generates rich results including LRP.Z analysis plots for individual files, different types of mean LRP plots for the whole dataset and a number of CSV files with feature relevance rankings and prediction MSE calculations.
 The results are also available under `results/` in this repository. Below you can find some examples of what kind of data can be generated with the current code.
 
 # Results
 
 ## Individual results
 The generated results include invidual analyses for each of the testset recordings. Each analysis comprises of a Layer-wise Relevance Propagation result heatmap aligned with the actual fundamental frequency plotted against the predicted values. The title of each plot is an ortographic transcription of the utterance, i.e.:
-![amu_pl_ilo_BAZA_2006A_zbitki_A0119](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/individual/amu_pl_ilo_BAZA_2006A_zbitki_A0119.png)
+![amu_pl_ilo_BAZA_2006A_zbitki_A0119](https://github.com/mrslacklines/intonation_synthesis/tree/master/intonation_synthesis/results/relevance/plots/raw/amu_pl_ilo_BAZA_2006A_zbitki_A0119.png)
 
-Additionally, the predicted F0 is plotted without log-normalization.
-![amu_pl_ilo_BAZA_2006A_zbitki_A0119_simple_pred_freq](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/individual/amu_pl_ilo_BAZA_2006A_zbitki_A0119_simple_pred_freq.png)
+Additionally, the predicted F0 is plotted on a separate figure.
+![amu_pl_ilo_BAZA_2006A_zbitki_A0119_simple_pred_freq](https://github.com/mrslacklines/intonation_synthesis/tree/master/intonation_synthesis/results/f0/preds/amu_pl_ilo_BAZA_2006A_zbitki_A0119_simple_pred_freq.png)
 
 ## General results
 Additionally, the script calculates different kinds of summed and mean relevance arrays for all of the 191 speech samples in the testset.
 * Sum
-![sum](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/sum.png)
+![sum](https://github.com/mrslacklines/intonation_synthesis/tree/master/intonation_synthesis/results/relevance/plots/aggregate/sum.png)
 * Absolute sum
-![abs sum](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/absolute_sum.png)
+![abs sum](https://github.com/mrslacklines/intonation_synthesis/tree/master/intonation_synthesis/results/relevance/plots/aggregate/absolute_sum.png)
 * Positive values-only sum
-![pos sum](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/positive_values_sum.png)
+![pos sum](https://github.com/mrslacklines/intonation_synthesis/tree/master/intonation_synthesis/results/relevance/plots/aggregate/positive_values_sum.png)
 * Negative values-only sum
-![neg sum](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/negative_values_sum.png)
+![neg sum](https://github.com/mrslacklines/intonation_synthesis/tree/master/intonation_synthesis/results/relevance/plots/aggregate/negative_values_sum.png)
 * Mean
-![mean](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/mean_(sum).png)
+![mean](https://github.com/mrslacklines/intonation_synthesis/tree/master/intonation_synthesis/results/relevance/plots/aggregate/mean_(sum).png)
 * Mean of absolute sum
-![mean abs sum](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/mean_(absolute_sum).png)
+![mean abs sum](https://github.com/mrslacklines/intonation_synthesis/tree/master/intonation_synthesis/results/relevance/plots/aggregate/mean_(absolute_sum).png)
 * Mean of positive values-only sum
-![mean pos sum](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/mean_(positive_only_sum).png)
+![mean pos sum](https://github.com/mrslacklines/intonation_synthesis/tree/master/intonation_synthesis/results/relevance/plots/aggregate/mean_(positive_only_sum).png)
 * Mean of negative values-only sum
-![mean neg sum](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/mean_(negative_only_sum).png)
+![mean neg sum](https://github.com/mrslacklines/intonation_synthesis/tree/master/intonation_synthesis/results/relevance/plots/aggregate/mean_(negative_only_sum).png)
 
 ### Feature group relevance
-Features were grouped into groups on three levels of granularity and their various means and standard deviations where plotted. Since the single most relevant feature (Voiced/Unvoiced or`VUV`) flattened the plots of the least relevant ones additional plots excluding the VUV were also added.
-The following examples show only the feature group means with and without VUVs. The rest of the plots can be found in the `results/plots/` directory of this repository.
+Individual features were additionally grouped into many different groups on various levels of abstraction and their various aggregate LRPs were plotted and comprise the final results of this study as they demonstrate how specific feature groups, or categories, influence the contour of the synthesized F0.
 
-* Low granularity groups
-![general mean feats relevance](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/feature_relevance_ranking_-_mean_(sum)_-_general.png)
-![general mean feats relevance](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/feature_relevance_ranking_-_mean_(sum)_-_general_-_no_vuv.png)
+![amu_pl_ilo_baza_2006a_zbitki_a0121](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/plots/feature_groups/specific/linguistic_level/with_relation_type/linguistic_levels_and_relation_types_amu_pl_ilo_baza_2006a_zbitki_a0121.png)
+
+![amu_pl_ilo_baza_2006a_zbitki_a0213](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/plots/feature_groups/specific/linguistic_level/with_relation_type/linguistic_levels_and_relation_types_amu_pl_ilo_baza_2006a_zbitki_a0213.png)
+
+![amu_pl_ilo_baza_2006c_c0536](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/plots/feature_groups/specific/linguistic_level/with_relation_type/linguistic_levels_and_relation_types_amu_pl_ilo_baza_2006c_c0536.png)
+
+![amu_pl_ilo_baza_2006c_c0432](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/plots/feature_groups/general/general_feature_categories_amu_pl_ilo_baza_2006c_c0432.png)
+
+![amu_pl_ilo_baza_2006e_e1338](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/plots/feature_groups/detailed/detailed_feature_categories_amu_pl_ilo_baza_2006e_e1338.png)
+
+![amu_pl_ilo_baza_2006e_e1237](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/plots/feature_groups/all/all_feature_categories_amu_pl_ilo_baza_2006e_e1237.png)
 
 
-* Medium granularity groups
-![medium mean feats relevance](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/feature_relevance_ranking_-_mean_(sum)_-_detailed.png)
-![medium mean feats relevance](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/feature_relevance_ranking_-_mean_(sum)_-_detailed_-_no_vuv.png)
+### Feature group rankings
 
+https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/rankings/plots/feature_relevance_ranking_-_absolute_sum_-_all_feature_categories.png
 
-* High granularity groups
-![all mean feats relevance](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/feature_relevance_ranking_-_mean_(sum)_-_all.png)
-![all mean feats relevance](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/plots/feature_relevance_ranking_-_mean_(sum)_-_all_-_no_vuv.png)
+The single most relevant feature (VUV) was removed to avoid scaling of the plot. 
+
+https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/rankings/plots/feature_relevance_ranking_-_absolute_sum_-_all_feature_categories_-_no_vuv.png
+
+https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/rankings/plots/feature_relevance_ranking_-_mean_(absolute_sum)_-_detailed_feature_categories_-_no_vuv.png
+
+https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/rankings/plots/feature_relevance_ranking_-_mean_(absolute_sum)_-_general_feature_categories_-_no_vuv.png
