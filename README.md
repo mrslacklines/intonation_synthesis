@@ -123,7 +123,7 @@ Additionally, the script calculates different kinds of aggregate results for all
 * Mean of negative values-only sum
 ![mean neg sum](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/plots/aggregate/mean_(negative_only_sum).png)
 
-### Feature group rankings
+### Feature group rankings based on mean of absolute sum
 
 ![feature_relevance_ranking_-_absolute_sum_-_all_feature_categories](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/rankings/plots/feature_relevance_ranking_-_absolute_sum_-_all_feature_categories.png)
 
