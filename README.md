@@ -85,27 +85,8 @@ The generated results include invidual analyses for each of the testset recordin
 Additionally, the predicted F0 is plotted on a separate figure.
 ![amu_pl_ilo_BAZA_2006A_zbitki_A0048_simple_pred_freq](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/f0/plots/predicted/amu_pl_ilo_BAZA_2006A_zbitki_A0048_simple_pred_freq.png)
 
-## General results
-Additionally, the script calculates different kinds of summed and mean relevance arrays for all of the 191 speech samples in the testset.
-* Sum
-![sum](https://github.com/mrslacklines/intonation_synthesis/tree/master/intonation_synthesis/results/relevance/plots/aggregate/sum.png)
-* Absolute sum
-![abs sum](https://github.com/mrslacklines/intonation_synthesis/tree/master/intonation_synthesis/results/relevance/plots/aggregate/absolute_sum.png)
-* Positive values-only sum
-![pos sum](https://github.com/mrslacklines/intonation_synthesis/tree/master/intonation_synthesis/results/relevance/plots/aggregate/positive_values_sum.png)
-* Negative values-only sum
-![neg sum](https://github.com/mrslacklines/intonation_synthesis/tree/master/intonation_synthesis/results/relevance/plots/aggregate/negative_values_sum.png)
-* Mean
-![mean](https://github.com/mrslacklines/intonation_synthesis/tree/master/intonation_synthesis/results/relevance/plots/aggregate/mean_(sum).png)
-* Mean of absolute sum
-![mean abs sum](https://github.com/mrslacklines/intonation_synthesis/tree/master/intonation_synthesis/results/relevance/plots/aggregate/mean_(absolute_sum).png)
-* Mean of positive values-only sum
-![mean pos sum](https://github.com/mrslacklines/intonation_synthesis/tree/master/intonation_synthesis/results/relevance/plots/aggregate/mean_(positive_only_sum).png)
-* Mean of negative values-only sum
-![mean neg sum](https://github.com/mrslacklines/intonation_synthesis/tree/master/intonation_synthesis/results/relevance/plots/aggregate/mean_(negative_only_sum).png)
-
 ### Feature group relevance
-Individual features were additionally grouped into many different groups on various levels of abstraction and their various aggregate LRPs were plotted and comprise the final results of this study as they demonstrate how specific feature groups, or categories, influence the contour of the synthesized F0.
+Individual features were also grouped into many different groups on various levels of abstraction and their aggregate LRPs was calculated.
 
 ![amu_pl_ilo_baza_2006a_zbitki_a0121](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/plots/feature_groups/specific/linguistic_level/with_relation_type/linguistic_levels_and_relation_types_amu_pl_ilo_baza_2006a_zbitki_a0121.png)
 
@@ -119,6 +100,25 @@ Individual features were additionally grouped into many different groups on vari
 
 ![amu_pl_ilo_baza_2006e_e1237](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/plots/feature_groups/all/all_feature_categories_amu_pl_ilo_baza_2006e_e1237.png)
 
+
+## General results
+Additionally, the script calculates different kinds of aggregate results for all of the 191 speech samples in the testset.
+* Sum
+![sum](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/plots/aggregate/sum.png)
+* Absolute sum
+![abs sum](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/plots/aggregate/absolute_sum.png)
+* Positive values-only sum
+![pos sum](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/plots/aggregate/positive_values_sum.png)
+* Negative values-only sum
+![neg sum](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/plots/aggregate/negative_values_sum.png)
+* Mean
+![mean](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/plots/aggregate/mean_(sum).png)
+* Mean of absolute sum
+![mean abs sum](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/plots/aggregate/mean_(absolute_sum).png)
+* Mean of positive values-only sum
+![mean pos sum](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/plots/aggregate/mean_(positive_only_sum).png)
+* Mean of negative values-only sum
+![mean neg sum](https://github.com/mrslacklines/intonation_synthesis/blob/master/intonation_synthesis/results/relevance/plots/aggregate/mean_(negative_only_sum).png)
 
 ### Feature group rankings
 
