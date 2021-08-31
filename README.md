@@ -1,8 +1,10 @@
 # Explainable Deep Neural F0 Model of Polish Read Speech
+**Author: Tomasz Kuczmarski**
+
 This projects aims at training a Deep Temporal Convolutional Neural Network (DTCNN or TCN) for modelling Polish read speech F0 and exploring the relevance of input linguistic features on the predicted F0 contours using the Explainable AI (XAI) algorithm - Layer-wise Relevance Propagation (LRP).
 
 Currently I am using the AWS SageMaker as a cloud service for running both the training and inference. The generation of feature relevance and plotting can be run both in cloud and locally.
-This project is the main part of my (**Tomasz Kuczmarski**) PhD dissertation, which is currently undergoing the reviews. Keep your fingers crossed :).
+This project is the main part of my PhD dissertation, which is currently undergoing the reviews. Keep your fingers crossed :).
 
 ## Build containers
 Build and push a docker container to the Amazon Web Services ECR repository
